@@ -237,22 +237,20 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
                 topBar = {
                     AirframeAppHeader(
                         isNightTheme = isNightTheme,
-                        isLiveBridgeConnected = isLiveBridgeConnected || viewModel.isNotificationAccessEnabled(context),
-                        query = omniboxQuery,
                         isSearchOpen = isSearchOpen,
                         isComposerOpen = isOmniboxComposerOpen,
+                        searchQuery = omniboxQuery,
                         pendingAttachment = pendingAttachment,
                         onToggleTheme = { viewModel.toggleNightTheme() },
                         onToggleSearch = { viewModel.toggleSearch() },
-                        onQueryChange = { viewModel.updateOmniboxQuery(it) },
-                        onClearQuery = { viewModel.clearOmnibox() },
                         onToggleComposer = { viewModel.toggleOmniboxComposer() },
+                        onSearchQueryChange = { viewModel.updateOmniboxQuery(it) },
+                        onClearSearch = { viewModel.clearOmnibox() },
                         onPickAttachment = { attachmentPickerLauncher.launch("*/*") },
-                        onClearPendingAttachment = { viewModel.clearPendingAttachment() },
+                        onClearAttachment = { viewModel.clearPendingAttachment() },
                         onSendOmniboxMessage = { recipient, platform, body ->
                             viewModel.sendOmniboxOutbound(context, recipient, platform, body)
-                        },
-                        onOpenLiveBridgeSettings = { viewModel.openNotificationAccessSettings(context) }
+                        }
                     )
                 },
                 bottomBar = {
@@ -413,13 +411,12 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
                                 // 1. Airframe Hero `Metric` + `ProgressBar` Section
                                 item(key = "inbox_airframe_hero_metric") {
                                     AirframeHeroMetricSection(
-                                        eyebrowLabel = "Today's Inbox",
-                                        eyebrowAside = "${allMessages.count { it.platform != MessagingPlatform.ALL }.coerceAtLeast(1)} threads · 5 apps",
-                                        numeralValue = unreadCount.toString(),
-                                        pillText = "$urgentCount urgent · $totalAttachments files",
-                                        ledeText = "One calm feed across every app you talk in.",
+                                        unreadCount = unreadCount,
+                                        vipNeedCount = urgentCount,
                                         clearedPercent = clearedPercent,
-                                        onPillClick = { viewModel.toggleVipOnlyFilter() }
+                                        topSenderName = featuredUrgentMessage?.senderName,
+                                        isLiveConnected = isLiveBridgeConnected || viewModel.isNotificationAccessEnabled(context),
+                                        onPillClick = { viewModel.openNotificationAccessSettings(context) }
                                     )
                                 }
 

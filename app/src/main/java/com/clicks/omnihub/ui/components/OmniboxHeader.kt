@@ -222,7 +222,12 @@ fun AirframeAppHeader(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(c.ground)
+            .padding(horizontal = AirframeSpace.gutter, vertical = 14.dp)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

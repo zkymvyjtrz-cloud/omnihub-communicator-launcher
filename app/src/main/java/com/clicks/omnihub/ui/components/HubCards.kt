@@ -64,6 +64,7 @@ import com.clicks.omnihub.model.AttachmentType
 import com.clicks.omnihub.model.ConversationTurn
 import com.clicks.omnihub.model.HubAttachment
 import com.clicks.omnihub.model.HubMessage
+import com.clicks.omnihub.model.MessagingPlatform
 import com.clicks.omnihub.model.PersonUnifiedThread
 import com.clicks.omnihub.ui.theme.AirframeSpace
 import com.clicks.omnihub.ui.theme.AirframeTheme

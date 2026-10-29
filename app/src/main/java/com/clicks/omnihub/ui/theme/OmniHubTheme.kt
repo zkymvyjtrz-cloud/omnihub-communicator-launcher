@@ -196,6 +196,7 @@ object AirframeSpace {
     val space3 = 12.dp
     val space4 = 16.dp
     val space5 = 20.dp
+    val space6 = 26.dp
     val gutter = 26.dp
     val section = 26.dp
     val top = 26.dp
@@ -213,6 +214,7 @@ object AirframeSpace {
     val sizeCapsuleHeight = 40.dp
     val sizeCapsuleCurrentHeight = 46.dp
     val sizeTabBar = 80.dp
+    val sizeTabbar = 80.dp
 }
 
 val LocalAirframeColors = staticCompositionLocalOf { AirframeIvoryPalette }
