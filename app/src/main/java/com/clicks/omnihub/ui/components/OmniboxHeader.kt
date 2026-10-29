@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +44,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.clicks.omnihub.model.HubViewMode
@@ -54,13 +56,10 @@ import com.clicks.omnihub.ui.theme.ObsidianSurface
 import com.clicks.omnihub.ui.theme.TextMuted
 import com.clicks.omnihub.ui.theme.TextPrimary
 import com.clicks.omnihub.ui.theme.TextSecondary
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
- * Top hardware-inspired status bar with dynamic Clicks Notification LED ring,
- * clock, unread badge counter, and View Mode switcher.
+ * Ultra-clean, single-line Top Header + Mode Tabs designed to maximize screen real estate
+ * on tall flagship displays like the Samsung Galaxy S23 Ultra.
  */
 @Composable
 fun CommunicatorHeaderBar(
@@ -71,44 +70,48 @@ fun CommunicatorHeaderBar(
     onSelectViewMode: (HubViewMode) -> Unit,
     onOpenLiveBridgeSettings: () -> Unit
 ) {
-    val timeText = remember {
-        SimpleDateFormat("HH:mm · EEE MMM d", Locale.US).format(Date())
-    }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .wrapContentHeight()
             .background(ObsidianSurface)
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        // Top hardware status row + Dynamic Notification LED
+        // Compact Single-Line Status Header
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
                 // Clicks Dynamic Notification LED indicator
                 Box(
                     modifier = Modifier
-                        .size(11.dp)
+                        .size(10.dp)
                         .clip(CircleShape)
                         .background(activeLedColor)
-                        .border(2.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+                        .border(1.5.dp, Color.White.copy(alpha = 0.3f), CircleShape)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "OMNIHUB COMMUNICATOR",
+                    text = "OMNIHUB",
                     color = TextPrimary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.1.sp
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .background(ClicksOrange.copy(alpha = 0.2f))
+                        .background(ClicksOrange.copy(alpha = 0.18f))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(
@@ -116,77 +119,84 @@ fun CommunicatorHeaderBar(
                         color = ClicksOrange,
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(
-                            if (isLiveBridgeConnected) Color(0x2610B981) else Color(0x26F59E0B)
-                        )
-                        .clickable { onOpenLiveBridgeSettings() }
-                        .padding(horizontal = 7.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = if (isLiveBridgeConnected) "LIVE BRIDGE ON" else "ENABLE LIVE ACCESS",
-                        color = if (isLiveBridgeConnected) Color(0xFF34D399) else Color(0xFFFBBF24),
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.SemiBold
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Compact Live Bridge Status Pill (never wraps to 2 lines)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(
+                        if (isLiveBridgeConnected) Color(0x2610B981) else Color(0x26F59E0B)
                     )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
+                    .border(
+                        width = 1.dp,
+                        color = if (isLiveBridgeConnected) Color(0xFF10B981).copy(alpha = 0.4f) else Color(0xFFF59E0B).copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(6.dp)
+                    )
+                    .clickable { onOpenLiveBridgeSettings() }
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+            ) {
                 Text(
-                    text = timeText,
-                    color = TextSecondary,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
+                    text = if (isLiveBridgeConnected) "● LIVE BRIDGE" else "● ENABLE LIVE",
+                    color = if (isLiveBridgeConnected) Color(0xFF34D399) else Color(0xFFFBBF24),
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // 4 Mode Tabs: 01 Hub Stream | 02 People Hub | 03 VIP Shield | 04 Minimal Apps
+        // Sleek Single-Row Segmented Mode Tabs (Guaranteed single line on all font scales)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            val shortTabLabels = mapOf(
+                HubViewMode.STREAM to "Stream",
+                HubViewMode.PEOPLE to "People",
+                HubViewMode.VIP_FOCUS to "VIP",
+                HubViewMode.APPS to "Apps"
+            )
+
             HubViewMode.entries.forEach { mode ->
                 val selected = mode == currentViewMode
+                val label = shortTabLabels[mode] ?: mode.label
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (selected) ClicksOrange.copy(alpha = 0.18f) else ObsidianCard)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(if (selected) ClicksOrange else ObsidianCard)
                         .border(
                             width = 1.dp,
                             color = if (selected) ClicksOrange else ObsidianBorder,
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(9.dp)
                         )
                         .clickable { onSelectViewMode(mode) }
-                        .padding(vertical = 7.dp, horizontal = 6.dp),
+                        .padding(vertical = 6.dp, horizontal = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = mode.label,
-                            color = if (selected) TextPrimary else TextSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "[${mode.shortcutKey}]",
-                            color = if (selected) ClicksOrange else TextMuted,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
+                    Text(
+                        text = label,
+                        color = if (selected) Color.White else TextSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
@@ -194,8 +204,7 @@ fun CommunicatorHeaderBar(
 }
 
 /**
- * The Next-Gen Universal Omnibox Command Bar & Multi-Platform Quick Composer.
- * Lets the user type anywhere to filter threads, execute `/msg @Contact`, or launch installed apps.
+ * Compact Universal Omnibox Command Bar & Channel Filter Pills.
  */
 @Composable
 fun OmniboxCommandBar(
@@ -216,37 +225,40 @@ fun OmniboxCommandBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .wrapContentHeight()
             .background(ObsidianSurface)
-            .padding(horizontal = 14.dp, vertical = 6.dp)
+            .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
-        // Omnibox Input Field
+        // Compact Single-Line Omnibox Input Field
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .background(ObsidianCard)
                 .border(
                     width = 1.dp,
                     color = if (query.isNotEmpty() || isComposerExpanded) ClicksOrange else ObsidianBorder,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(10.dp)
                 )
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Default.Terminal,
                 contentDescription = "Omnibox Command",
                 tint = ClicksOrange,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(15.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Box(modifier = Modifier.weight(1f)) {
                 if (query.isEmpty()) {
                     Text(
-                        text = "Omnibox: Type @person, /msg, or search all apps...",
+                        text = "Search messages, @person, or apps...",
                         color = TextMuted,
                         fontSize = 12.sp,
-                        fontFamily = FontFamily.Monospace
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 BasicTextField(
@@ -255,8 +267,7 @@ fun OmniboxCommandBar(
                     singleLine = true,
                     textStyle = TextStyle(
                         color = TextPrimary,
-                        fontSize = 13.sp,
-                        fontFamily = FontFamily.Monospace
+                        fontSize = 13.sp
                     ),
                     cursorBrush = SolidColor(ClicksOrange),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -264,6 +275,7 @@ fun OmniboxCommandBar(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+            Spacer(modifier = Modifier.width(6.dp))
             if (query.isNotEmpty() || isComposerExpanded) {
                 IconButton(
                     onClick = onClearQuery,
@@ -285,11 +297,12 @@ fun OmniboxCommandBar(
                         .padding(horizontal = 8.dp, vertical = 3.dp)
                 ) {
                     Text(
-                        text = "/msg +",
+                        text = "+ Compose",
                         color = ClicksOrange,
                         fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -300,12 +313,12 @@ fun OmniboxCommandBar(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
+                    .padding(top = 6.dp),
                 color = ObsidianCard,
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(12.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, ClicksOrange.copy(alpha = 0.5f))
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(10.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -314,18 +327,18 @@ fun OmniboxCommandBar(
                         Text(
                             text = "UNIVERSAL OMNIBOX COMPOSER",
                             color = ClicksOrange,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = "Cross-Platform Dispatch",
                             color = TextSecondary,
-                            fontSize = 11.sp
+                            fontSize = 10.sp
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     // Recipient Row
                     Row(
@@ -334,7 +347,7 @@ fun OmniboxCommandBar(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
                             .background(ObsidianSurface)
-                            .padding(horizontal = 10.dp, vertical = 7.dp)
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Text(
                             text = "TO:",
@@ -358,7 +371,7 @@ fun OmniboxCommandBar(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     // Channel Selector Pills (WhatsApp, Teams, Outlook, Gmail, SMS, Messenger)
                     Row(
@@ -371,27 +384,29 @@ fun OmniboxCommandBar(
                             val isSelected = composePlatform == platform
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(7.dp))
                                     .background(if (isSelected) platform.accentColor else ObsidianSurface)
                                     .border(
                                         width = 1.dp,
                                         color = platform.accentColor.copy(alpha = 0.5f),
-                                        shape = RoundedCornerShape(8.dp)
+                                        shape = RoundedCornerShape(7.dp)
                                     )
                                     .clickable { composePlatform = platform }
-                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                                    .padding(horizontal = 9.dp, vertical = 4.dp)
                             ) {
                                 Text(
                                     text = platform.displayName,
                                     color = if (isSelected) Color.White else platform.accentColor,
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     // Message Body + Send Button
                     Row(
@@ -408,17 +423,17 @@ fun OmniboxCommandBar(
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(ObsidianSurface)
                                 .border(1.dp, ObsidianBorder, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 10.dp, vertical = 9.dp)
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(ClicksOrange)
                                 .clickable {
                                     onSendOmniboxMessage(recipientInput, composePlatform, messageBodyInput)
                                 }
-                                .padding(horizontal = 12.dp, vertical = 9.dp),
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -426,14 +441,16 @@ fun OmniboxCommandBar(
                                     text = "Send",
                                     color = Color.White,
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(
                                     imageVector = Icons.Default.Send,
                                     contentDescription = "Send",
                                     tint = Color.White,
-                                    modifier = Modifier.size(13.dp)
+                                    modifier = Modifier.size(12.dp)
                                 )
                             }
                         }
@@ -442,7 +459,7 @@ fun OmniboxCommandBar(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         // BlackBerry Hub Horizontal Channel Filter Bar
         Row(
@@ -456,23 +473,25 @@ fun OmniboxCommandBar(
                 val count = platformCounts[platform] ?: 0
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(9.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(
                             if (isSelected) platform.accentColor else ObsidianCard
                         )
                         .border(
                             width = 1.dp,
                             color = if (isSelected) platform.accentColor else platform.accentColor.copy(alpha = 0.28f),
-                            shape = RoundedCornerShape(9.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
                         .clickable { onSelectPlatform(platform) }
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                        .padding(horizontal = 9.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = "${platform.displayName} · $count",
                         color = if (isSelected) Color.White else platform.accentColor,
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }

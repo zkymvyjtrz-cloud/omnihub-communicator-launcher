@@ -55,7 +55,7 @@ class HubViewModel : ViewModel() {
     private val _inlineReplyingMessageId = MutableStateFlow<String?>(null)
     val inlineReplyingMessageId: StateFlow<String?> = _inlineReplyingMessageId.asStateFlow()
 
-    private val _showTactileShortcutDeck = MutableStateFlow(true)
+    private val _showTactileShortcutDeck = MutableStateFlow(false)
     val showTactileShortcutDeck: StateFlow<Boolean> = _showTactileShortcutDeck.asStateFlow()
 
     private val _installedApps = MutableStateFlow<List<InstalledAppInfo>>(emptyList())

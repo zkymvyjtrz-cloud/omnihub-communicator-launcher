@@ -13,8 +13,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -31,26 +35,33 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.clicks.omnihub.model.HubViewMode
+import com.clicks.omnihub.model.InstalledAppInfo
 import com.clicks.omnihub.model.MessagingPlatform
 import com.clicks.omnihub.ui.components.ClicksTactileShortcutDeck
 import com.clicks.omnihub.ui.components.CommunicatorHeaderBar
 import com.clicks.omnihub.ui.components.HubMessageCard
-import com.clicks.omnihub.ui.components.MinimalSpeedDialAppList
 import com.clicks.omnihub.ui.components.OmniboxCommandBar
 import com.clicks.omnihub.ui.components.PersonUnifiedThreadCard
 import com.clicks.omnihub.ui.theme.ClicksOrange
 import com.clicks.omnihub.ui.theme.ObsidianBackground
 import com.clicks.omnihub.ui.theme.ObsidianBorder
 import com.clicks.omnihub.ui.theme.ObsidianCard
+import com.clicks.omnihub.ui.theme.ObsidianSurface
+import com.clicks.omnihub.ui.theme.TextMuted
 import com.clicks.omnihub.ui.theme.TextPrimary
 import com.clicks.omnihub.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
 
 /**
  * Root Home Screen Composable for the OmniHub Communicator Launcher.
+ * Optimized for full-screen utilization on tall flagship phones (e.g., Galaxy S23 Ultra):
+ * - Compact fixed top header + Omnibox
+ * - Full-height `weight(1f)` LazyColumn that always starts immediately below the header
+ * - Compact single-line bottom shortcut bar
  */
 @Composable
 fun OmniHubLauncherScreen(viewModel: HubViewModel) {
@@ -91,12 +102,37 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
         focused?.platform?.accentColor ?: ClicksOrange
     }
 
+    val defaultEssentialApps = remember {
+        listOf(
+            InstalledAppInfo("Phone Dialer", "com.samsung.android.dialer", "Phone"),
+            InstalledAppInfo("Messages (SMS)", "com.google.android.apps.messaging", "Comms"),
+            InstalledAppInfo("WhatsApp", "com.whatsapp", "Comms"),
+            InstalledAppInfo("Microsoft Teams", "com.microsoft.teams", "Comms"),
+            InstalledAppInfo("Microsoft Outlook", "com.microsoft.office.outlook", "Comms"),
+            InstalledAppInfo("Gmail", "com.google.android.gm", "Comms"),
+            InstalledAppInfo("Calendar", "com.samsung.android.calendar", "Schedule"),
+            InstalledAppInfo("Google Maps", "com.google.android.apps.maps", "Navigation"),
+            InstalledAppInfo("Camera", "com.sec.android.app.camera", "Camera")
+        )
+    }
+
+    val filteredApps = remember(installedApps, omniboxQuery) {
+        val source = installedApps.ifEmpty { defaultEssentialApps }
+        if (omniboxQuery.isBlank() || omniboxQuery.startsWith("/")) {
+            source
+        } else {
+            source.filter { it.label.contains(omniboxQuery, ignoreCase = true) }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(ObsidianBackground)
+            .statusBarsPadding()
+            .navigationBarsPadding()
     ) {
-        // 1. Top Hardware-Inspired Header + Dynamic Notification LED + Mode Switcher
+        // 1. Compact Top Header + Mode Tabs
         CommunicatorHeaderBar(
             unreadCount = allMessages.count { it.isUnread },
             activeLedColor = activeLedColor,
@@ -106,7 +142,7 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
             onOpenLiveBridgeSettings = { viewModel.openNotificationAccessSettings(context) }
         )
 
-        // 2. Universal Omnibox Command Bar & Channel Filter Pills
+        // 2. Compact Omnibox Command Bar & Channel Filter Pills
         OmniboxCommandBar(
             query = omniboxQuery,
             isComposerExpanded = isOmniboxComposerOpen,
@@ -121,14 +157,14 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
             }
         )
 
-        // 3. Central Triage Viewport (Stream, People Hub, VIP Shield, or Minimal Apps)
+        // 3. Full-Screen Scrollable Content Area (Takes ~80% of the S23 Ultra screen)
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // VIP Focus Mode Banner
             if (viewMode == HubViewMode.VIP_FOCUS) {
@@ -137,10 +173,10 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(ClicksOrange.copy(alpha = 0.14f))
-                            .border(1.dp, ClicksOrange.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
-                            .padding(12.dp),
+                            .border(1.dp, ClicksOrange.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                            .padding(10.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -148,16 +184,17 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
                             Text(
                                 text = "VIP PRIORITY SHIELD ACTIVE",
                                 color = ClicksOrange,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Showing urgent VIP threads only · $heldCount non-VIP notifications held for later",
+                                text = "Urgent VIP threads only · $heldCount non-VIP held for later",
                                 color = TextPrimary,
-                                fontSize = 12.sp
+                                fontSize = 11.sp
                             )
                         }
+                        Spacer(modifier = Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
@@ -169,7 +206,9 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
                             Text(
                                 text = "Show All",
                                 color = TextPrimary,
-                                fontSize = 11.sp
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -197,17 +236,104 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
                 }
 
                 HubViewMode.APPS -> {
-                    item(key = "minimal_apps_drawer") {
-                        MinimalSpeedDialAppList(
-                            installedApps = installedApps,
-                            searchQuery = omniboxQuery,
-                            onLaunchApp = { app ->
-                                viewModel.launchApp(context, app.packageName, app.label)
-                            },
-                            onOpenDefaultLauncherSettings = {
-                                viewModel.openDefaultLauncherSettings(context)
+                    item(key = "set_default_launcher_banner") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(ClicksOrange.copy(alpha = 0.14f))
+                                .border(1.dp, ClicksOrange.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                                .clickable { viewModel.openDefaultLauncherSettings(context) }
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "MINIMAL SPEED-DIAL LAUNCHER",
+                                    color = ClicksOrange,
+                                    fontSize = 10.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${filteredApps.size} installed apps · Tap to set Default Home",
+                                    color = TextPrimary,
+                                    fontSize = 12.sp
+                                )
                             }
-                        )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(ClicksOrange)
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = "Set Default",
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+                    }
+
+                    // Render each app as a native LazyColumn item so long app lists never clip or collapse!
+                    itemsIndexed(
+                        items = filteredApps,
+                        key = { _, app -> "app_${app.packageName}" }
+                    ) { index, app ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(ObsidianCard)
+                                .border(1.dp, ObsidianBorder, RoundedCornerShape(11.dp))
+                                .clickable { viewModel.launchApp(context, app.packageName, app.label) }
+                                .padding(horizontal = 14.dp, vertical = 11.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = String.format("%02d", index + 1),
+                                    color = TextMuted,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = app.label,
+                                    color = TextPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(ObsidianSurface)
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = app.categoryTag,
+                                    color = TextSecondary,
+                                    fontSize = 10.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -220,7 +346,7 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
                                     .clip(RoundedCornerShape(16.dp))
                                     .background(ObsidianCard)
                                     .border(1.dp, ObsidianBorder, RoundedCornerShape(16.dp))
-                                    .padding(28.dp),
+                                    .padding(24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
@@ -236,7 +362,7 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
                                     color = TextSecondary,
                                     fontSize = 12.sp
                                 )
-                                Spacer(modifier = Modifier.height(14.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(10.dp))
@@ -277,7 +403,7 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
             }
         }
 
-        // 4. Bottom Clicks Tactile Shortcut Dock & Optional On-Screen QWERTY Deck
+        // 4. Compact Bottom Dock (Keypad collapsed by default for full-screen S23 Ultra view)
         ClicksTactileShortcutDeck(
             statusBannerText = statusBanner,
             isExpanded = showTactileDeck,
