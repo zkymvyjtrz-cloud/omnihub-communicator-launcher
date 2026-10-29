@@ -61,6 +61,15 @@ class HubViewModel : ViewModel() {
     private val _isOmniboxComposerOpen = MutableStateFlow(false)
     val isOmniboxComposerOpen: StateFlow<Boolean> = _isOmniboxComposerOpen.asStateFlow()
 
+    private val _isSearchOpen = MutableStateFlow(false)
+    val isSearchOpen: StateFlow<Boolean> = _isSearchOpen.asStateFlow()
+
+    /**
+     * Airframe Theme mode: `false` = Ivory (`#F7F6F2` default), `true` = Night (`#111412`).
+     */
+    private val _isNightTheme = MutableStateFlow(false)
+    val isNightTheme: StateFlow<Boolean> = _isNightTheme.asStateFlow()
+
     private val _openedConversationId = MutableStateFlow<String?>(null)
     val openedConversationId: StateFlow<String?> = _openedConversationId.asStateFlow()
 
@@ -198,9 +207,22 @@ class HubViewModel : ViewModel() {
         _isOmniboxComposerOpen.value = next
     }
 
+    fun toggleSearch(forceOpen: Boolean? = null) {
+        val next = forceOpen ?: !_isSearchOpen.value
+        _isSearchOpen.value = next
+        if (!next) {
+            _omniboxQuery.value = ""
+        }
+    }
+
+    fun toggleNightTheme() {
+        _isNightTheme.value = !_isNightTheme.value
+    }
+
     fun clearOmnibox() {
         _omniboxQuery.value = ""
         _isOmniboxComposerOpen.value = false
+        _isSearchOpen.value = false
     }
 
     fun openConversation(messageId: String) {

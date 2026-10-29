@@ -11,8 +11,8 @@ android {
         applicationId = "com.clicks.omnihub"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.3.0-widgets-apps"
+        versionCode = 5
+        versionName = "1.4.0-airframe"
 
         vectorDrawables {
             useSupportLibrary = true

@@ -2,6 +2,7 @@ package com.clicks.omnihub.ui.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -24,29 +25,19 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.TableChart
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FilledIconButton
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,8 +50,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -73,247 +65,353 @@ import com.clicks.omnihub.model.ConversationTurn
 import com.clicks.omnihub.model.HubAttachment
 import com.clicks.omnihub.model.HubMessage
 import com.clicks.omnihub.model.PersonUnifiedThread
-import com.clicks.omnihub.ui.theme.M3SurfaceBackground
-import com.clicks.omnihub.ui.theme.M3SurfaceContainer
-import com.clicks.omnihub.ui.theme.M3SurfaceContainerHigh
+import com.clicks.omnihub.ui.theme.AirframeSpace
+import com.clicks.omnihub.ui.theme.AirframeTheme
+import com.clicks.omnihub.ui.theme.AirframeType
+import java.util.Locale
 
 /**
- * Clean Material 3 Conversation Stream Card.
- * Clicking anywhere on the card opens the full-screen [ConversationContextSheet] with the
- * complete message history, attachments, and native system keyboard composer.
+ * Airframe `ListRow` (`ListRow/preview.html`).
+ * - Rows sit directly on `ground`, never in cards; separated by a 1px bottom hairline (`line`).
+ * - Unread rows have `af-avatar--active` (`sage` background, `forest` initials), `rowTitleUnread` (`600` weight, `ink`),
+ *   and a 7dp `forest` dot (`af-dot`).
+ * - One-line light preview (`body-light`) and uppercase `meta` line ("OUTLOOK · 1 ATTACHMENT").
+ * - Trailing outline `IconButton` check (`af-iconbtn--outline`).
  */
 @Composable
-fun HubMessageCard(
+fun AirframeMessageListRow(
     message: HubMessage,
     onOpenConversation: () -> Unit,
-    onQuickReply: (String) -> Unit,
-    onArchive: () -> Unit,
-    onSnooze: () -> Unit,
-    onToggleVip: () -> Unit
+    onMarkDone: () -> Unit
 ) {
-    ElevatedCard(
-        onClick = onOpenConversation,
-        shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.fillMaxWidth()
+    val c = AirframeTheme.colors
+    val metaParts = mutableListOf(message.platform.displayName)
+    if (message.attachments.isNotEmpty()) {
+        val count = message.attachments.size
+        metaParts.add(if (count == 1) "1 attachment" else "$count attachments")
+    } else if (!message.subject.isNullOrBlank()) {
+        metaParts.add(message.subject)
+    }
+    val metaLine = metaParts.joinToString(" · ").uppercase(Locale.US)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onOpenConversation() }
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(M3SurfaceContainer)
-                .padding(16.dp)
+                .padding(vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Top Row: Avatar, Sender, Platform Pill, Time & Star
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // `af-avatar` / `af-avatar--active`
+            Box(
+                modifier = Modifier
+                    .size(AirframeSpace.sizeAvatar)
+                    .clip(CircleShape)
+                    .background(if (message.isUnread) c.sage else c.surface),
+                contentAlignment = Alignment.Center
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(message.avatarColor),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = message.senderInitials,
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = message.senderName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = if (message.isUnread) FontWeight.Bold else FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
-                                color = message.platform.containerColor,
-                                shape = CircleShape
-                            ) {
-                                Text(
-                                    text = message.platform.displayName,
-                                    color = message.platform.accentColor,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-
-                        Text(
-                            text = message.subject ?: message.senderRoleOrHandle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (message.subject != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = if (message.subject != null) FontWeight.Medium else FontWeight.Normal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = message.relativeTimeLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    IconButton(
-                        onClick = onToggleVip,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = "VIP Priority",
-                            tint = if (message.isVip) Color(0xFFFBBF24) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
+                Text(
+                    text = message.senderInitials,
+                    style = AirframeType.body.copy(fontWeight = FontWeight.SemiBold),
+                    color = if (message.isUnread) c.forest else c.text
+                )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.width(14.dp))
 
-            // Message Body Preview
-            Text(
-                text = message.body,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f),
-                lineHeight = 20.sp,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            // Attachment Pills (if any files/images are attached to this conversation)
-            if (message.attachments.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    message.attachments.forEach { att ->
-                        Surface(
-                            color = M3SurfaceContainerHigh,
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = iconForAttachmentType(att.type),
-                                    contentDescription = att.fileName,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = att.fileName,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Bottom Row: Thread Context Indicator + Quick Reply Chips + Triage Actions
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // `af-row-body`
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (message.conversationHistory.size > 1) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                            shape = CircleShape
-                        ) {
-                            Text(
-                                text = "${message.conversationHistory.size} messages · Tap to open",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                            )
-                        }
-                    }
-
-                    message.quickReplies.take(2).forEach { chip ->
-                        SuggestionChip(
-                            onClick = { onQuickReply(chip) },
-                            label = {
-                                Text(
-                                    text = chip,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            },
-                            shape = CircleShape
+                    Text(
+                        text = message.senderName,
+                        style = if (message.isUnread) AirframeType.rowTitleUnread else AirframeType.rowTitle,
+                        color = if (message.isUnread) c.ink else c.text,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (message.isUnread) {
+                        Spacer(modifier = Modifier.width(AirframeSpace.space2))
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(c.forest)
                         )
                     }
+                    Spacer(modifier = Modifier.width(AirframeSpace.space2))
+                    Text(
+                        text = message.relativeTimeLabel,
+                        style = AirframeType.caption,
+                        color = c.textMuted
+                    )
                 }
 
+                Text(
+                    text = message.body,
+                    style = AirframeType.bodyLight,
+                    color = c.text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Text(
+                    text = metaLine,
+                    style = AirframeType.meta,
+                    color = c.textMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            // `af-iconbtn af-iconbtn--outline`
+            AirframeIconButton(
+                icon = Icons.Default.Check,
+                contentDescription = "Mark ${message.senderName} done",
+                style = AirframeIconButtonStyle.OUTLINE,
+                onClick = onMarkDone
+            )
+        }
+
+        // 1px bottom hairline
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(c.line)
+        )
+    }
+}
+
+/**
+ * Airframe Person-Centric Unified Row (`People` tab).
+ * Sits directly on `ground` with hairline separator, merging all active platforms for a contact.
+ */
+@Composable
+fun AirframePersonUnifiedRow(
+    thread: PersonUnifiedThread,
+    onOpenMessageConversation: (String) -> Unit,
+    onArchiveAllFromPerson: () -> Unit
+) {
+    val c = AirframeTheme.colors
+    val latest = thread.messages.first()
+    val channelsMeta = thread.activePlatforms.joinToString(" · ") { it.displayName }.uppercase(Locale.US)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onOpenMessageConversation(latest.id) }
+            .padding(top = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(AirframeSpace.sizeAvatar)
+                    .clip(CircleShape)
+                    .background(c.sage),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = thread.senderInitials,
+                    style = AirframeType.body.copy(fontWeight = FontWeight.SemiBold),
+                    color = c.forest
+                )
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onSnooze,
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Schedule,
-                            contentDescription = "Snooze",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = onArchive,
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Done",
-                            tint = Color(0xFF34D399),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    Text(
+                        text = thread.senderName,
+                        style = AirframeType.rowTitleUnread,
+                        color = c.ink
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    // Presence dot (`signal`)
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(c.signal)
+                    )
                 }
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "$channelsMeta · ${thread.messages.size} MESSAGES",
+                    style = AirframeType.meta,
+                    color = c.textMuted
+                )
+            }
+
+            AirframeIconButton(
+                icon = Icons.Default.Check,
+                contentDescription = "Mark ${thread.senderName} done",
+                style = AirframeIconButtonStyle.OUTLINE,
+                onClick = onArchiveAllFromPerson
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Individual messages from this person across channels
+        thread.messages.forEach { msg ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 58.dp, bottom = 8.dp)
+                    .clickable { onOpenMessageConversation(msg.id) },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = msg.body,
+                        style = AirframeType.bodyLight,
+                        color = c.text,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${msg.platform.displayName} · ${msg.relativeTimeLabel}".uppercase(Locale.US),
+                        style = AirframeType.meta,
+                        color = c.textMuted
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(c.line)
+        )
+    }
+}
+
+/**
+ * Airframe File Tile (`af-file` + `af-file-kind` from `MessageBubble/preview.html`).
+ * 36x36dp `sage` tile with 3-letter code in `forest` (`PPT`, `XLS`, `PDF`, `IMG`), filename in `ink`,
+ * size in `textMuted`, and trailing action icon.
+ */
+@Composable
+fun AirframeAttachmentTile(
+    attachment: HubAttachment,
+    onActionClick: () -> Unit,
+    actionIcon: ImageVector = Icons.Default.Download
+) {
+    val c = AirframeTheme.colors
+    val kindCode = when (attachment.type) {
+        AttachmentType.PRESENTATION -> "PPT"
+        AttachmentType.SPREADSHEET -> "XLS"
+        AttachmentType.IMAGE -> "IMG"
+        AttachmentType.AUDIO -> "WAV"
+        AttachmentType.LINK -> "URL"
+        AttachmentType.DOCUMENT -> if (attachment.fileName.endsWith(".pdf", true)) "PDF" else "DOC"
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(c.ground)
+            .clickable { onActionClick() }
+            .padding(start = 8.dp, top = 6.dp, bottom = 6.dp, end = 4.dp)
+    ) {
+        if (attachment.previewBitmap != null) {
+            Image(
+                bitmap = attachment.previewBitmap.asImageBitmap(),
+                contentDescription = attachment.fileName,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(130.dp)
+                    .padding(end = 4.dp, bottom = 6.dp)
+                    .clip(RoundedCornerShape(AirframeSpace.radiusSm))
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(AirframeSpace.radiusSm))
+                    .background(c.sage),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = kindCode,
+                    style = AirframeType.meta.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                    color = c.forest
+                )
+            }
+
+            Spacer(modifier = Modifier.width(AirframeSpace.space3))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = attachment.fileName,
+                    style = AirframeType.caption.copy(fontWeight = FontWeight.Medium),
+                    color = c.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = attachment.fileSizeLabel,
+                    style = AirframeType.caption.copy(fontSize = 12.sp),
+                    color = c.textMuted,
+                    maxLines = 1
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(AirframeSpace.sizeTouch)
+                    .clip(CircleShape)
+                    .clickable { onActionClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = actionIcon,
+                    contentDescription = attachment.fileName,
+                    tint = c.ink,
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
     }
 }
 
 /**
- * Full-Screen Material 3 Conversation Context View.
- * Shows:
- * - Full multi-turn message history (both incoming and sent messages)
- * - Rich Attachment Cards (PDFs, PowerPoint decks, Excel sheets, Images)
- * - "Open in [App]" button to jump directly into the native app when needed
- * - Native Device Keyboard Composer with `📎 Attach` button
+ * Airframe Full Conversation Detail Screen (`MessageBubble`, `Callout`, and `Composer` specs).
+ * - Detail Header: Back `IconButton` on left, Open App & Done `IconButton`s on right (no wordmark).
+ * - Subject / Contact Header: `title-xl` serif name ("Sarah Jenkins"), presence dot, and `lede` subtitle.
+ * - Suggested Reply `af-callout` ("SUGGESTED REPLY" in `sage-wash`) at top of composer area.
+ * - Thread (`af-thread`): Incoming bubbles on `surface` with bottom-left `radius-xs` tail;
+ *   Outgoing bubbles in `forest` with `on-forest` text and bottom-right `radius-xs` tail;
+ *   each followed by uppercase `af-meta` ("TEAMS · 9:41 AM").
+ * - Docked Composer Tray (`af-tray` on `surface-raised` with `line` top border):
+ *   Quick-reply `af-chip`s, `af-select-pill` channel switcher, rounded `af-field` (using native keyboard),
+ *   `forest` send button (`af-iconbtn--filled`), and status caption ("Sarah is active on Teams, so your reply goes there.").
  */
 @Composable
 fun ConversationContextSheet(
@@ -326,10 +424,14 @@ fun ConversationContextSheet(
     onOpenInNativeApp: () -> Unit,
     onArchive: () -> Unit
 ) {
+    val c = AirframeTheme.colors
     val keyboardController = LocalSoftwareKeyboardController.current
     val replyFocusRequester = remember { FocusRequester() }
     val threadListState = rememberLazyListState()
+
     var replyInput by remember(message.id) { mutableStateOf("") }
+    var activeReplyPlatform by remember(message.platform) { mutableStateOf(message.platform) }
+    val firstName = remember(message.senderName) { message.senderName.substringBefore(" ") }
 
     LaunchedEffect(message.conversationHistory.size) {
         if (message.conversationHistory.isNotEmpty()) {
@@ -340,240 +442,266 @@ fun ConversationContextSheet(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(M3SurfaceBackground)
+            .background(c.ground)
             .imePadding()
     ) {
-        // 1. Material 3 Conversation Top App Bar
-        Surface(
-            color = M3SurfaceContainer,
-            tonalElevation = 2.dp,
-            modifier = Modifier.fillMaxWidth()
+        // 1. Airframe Detail Screen Header (Back button on left, round actions on right, no wordmark)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = AirframeSpace.gutter,
+                    end = AirframeSpace.gutter,
+                    top = AirframeSpace.space4,
+                    bottom = AirframeSpace.space3
+                ),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    IconButton(onClick = {
-                        keyboardController?.hide()
-                        onBack()
-                    }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back to Inbox"
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(message.avatarColor),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = message.senderInitials,
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = message.senderName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                color = message.platform.containerColor,
-                                shape = CircleShape
-                            ) {
-                                Text(
-                                    text = message.platform.displayName,
-                                    color = message.platform.accentColor,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                        Text(
-                            text = message.subject ?: message.senderRoleOrHandle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+            AirframeIconButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back to inbox",
+                style = AirframeIconButtonStyle.SURFACE,
+                onClick = {
+                    keyboardController?.hide()
+                    onBack()
                 }
+            )
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AssistChip(
-                        onClick = onOpenInNativeApp,
-                        label = {
-                            Text(
-                                text = "Open App",
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                                contentDescription = "Open in Native App",
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    )
-                    IconButton(onClick = onArchive) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Archive Conversation",
-                            tint = Color(0xFF34D399)
-                        )
-                    }
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(AirframeSpace.space2)) {
+                AirframeIconButton(
+                    icon = Icons.AutoMirrored.Filled.OpenInNew,
+                    contentDescription = "Open in ${message.platform.displayName}",
+                    style = AirframeIconButtonStyle.SURFACE,
+                    onClick = onOpenInNativeApp
+                )
+                AirframeIconButton(
+                    icon = Icons.Default.Check,
+                    contentDescription = "Mark done",
+                    style = AirframeIconButtonStyle.DONE,
+                    onClick = onArchive
+                )
             }
         }
 
-        // 2. Full Multi-Turn Conversation Context Timeline
+        // 2. Scrollable Editorial Header + Thread Bubbles + Suggested Reply Callout
         LazyColumn(
             state = threadListState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(horizontal = AirframeSpace.gutter, vertical = AirframeSpace.space3),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            if (message.subject != null) {
-                item(key = "subject_banner") {
-                    Surface(
-                        color = M3SurfaceContainer,
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = "SUBJECT",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = message.subject,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
+            // Editorial `title-xl` Subject Header
+            item(key = "detail_editorial_header") {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(c.signal)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "ACTIVE ON ${activeReplyPlatform.displayName.uppercase(Locale.US)}",
+                            style = AirframeType.eyebrow,
+                            color = c.textMuted
+                        )
                     }
+                    Spacer(modifier = Modifier.height(AirframeSpace.space2))
+                    Text(
+                        text = message.senderName,
+                        style = AirframeType.titleXl,
+                        color = c.ink
+                    )
+                    if (!message.subject.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(AirframeSpace.space2))
+                        Text(
+                            text = message.subject,
+                            style = AirframeType.lede,
+                            color = c.text
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(AirframeSpace.space5))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(c.line)
+                    )
                 }
             }
 
+            // Conversation Turns (`af-thread` / `af-msg` / `af-bubble`)
             items(
                 items = message.conversationHistory,
                 key = { it.id }
             ) { turn ->
-                ConversationBubbleItem(
+                AirframeMessageBubbleItem(
                     turn = turn,
                     onAttachmentClick = onOpenInNativeApp
                 )
             }
-        }
 
-        // 3. Smart Reply Suggestion Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            message.quickReplies.forEach { quickReply ->
-                SuggestionChip(
-                    onClick = { onSendReply(quickReply) },
-                    label = { Text(quickReply) },
-                    shape = CircleShape
-                )
+            // Airframe `af-callout` ("Suggested reply")
+            if (message.quickReplies.isNotEmpty()) {
+                item(key = "suggested_callout") {
+                    val suggested = message.quickReplies.first()
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(AirframeSpace.radiusXl))
+                            .background(c.sageWash)
+                            .clickable { onSendReply(suggested) }
+                            .padding(horizontal = AirframeSpace.space4, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "SUGGESTED REPLY · TAP TO SEND",
+                            style = AirframeType.meta.copy(color = c.forest, fontWeight = FontWeight.Bold),
+                            color = c.forest
+                        )
+                        Text(
+                            text = suggested,
+                            style = AirframeType.rowTitle,
+                            color = c.ink
+                        )
+                    }
+                }
             }
         }
 
-        // 4. Native Device Keyboard Composer + Attachment Picker Bar
-        Surface(
-            color = M3SurfaceContainer,
-            tonalElevation = 3.dp,
-            modifier = Modifier.fillMaxWidth()
+        // 3. Docked Airframe Composer Tray (`af-tray` on `surface-raised` with `line` top border)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(c.surfaceRaised)
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(c.line)
+            )
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .padding(horizontal = AirframeSpace.space4, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                if (pendingAttachment != null) {
-                    AttachmentChipPreview(
-                        attachment = pendingAttachment,
-                        onRemove = onClearPendingAttachment
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
+                // Quick reply chips (`af-chip`)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    message.quickReplies.forEach { qr ->
+                        AirframeChip(
+                            label = qr,
+                            onClick = { onSendReply(qr) }
+                        )
+                    }
                 }
 
+                if (pendingAttachment != null) {
+                    AirframeAttachmentTile(
+                        attachment = pendingAttachment,
+                        onActionClick = onClearPendingAttachment,
+                        actionIcon = Icons.Default.Close
+                    )
+                }
+
+                // `af-composer`: Channel `af-select-pill` + Attach + `af-field` + `af-iconbtn--filled`
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(AirframeSpace.space2)
                 ) {
-                    IconButton(onClick = onPickAttachment) {
+                    // `af-select-pill` (Tap to cycle platform)
+                    Row(
+                        modifier = Modifier
+                            .height(AirframeSpace.sizeTouch)
+                            .clip(CircleShape)
+                            .background(c.sageSoft)
+                            .clickable {
+                                val platforms = MessagingPlatform.entries.filter { it != MessagingPlatform.ALL }
+                                val nextIdx = (platforms.indexOf(activeReplyPlatform) + 1) % platforms.size
+                                activeReplyPlatform = platforms[nextIdx]
+                            }
+                            .padding(start = 14.dp, end = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = activeReplyPlatform.displayName,
+                            style = AirframeType.body.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+                            color = c.forest
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
                         Icon(
-                            imageVector = Icons.Default.AttachFile,
-                            contentDescription = "Attach File or Photo",
-                            tint = MaterialTheme.colorScheme.primary
+                            imageVector = Icons.Default.UnfoldMore,
+                            contentDescription = "Switch channel",
+                            tint = c.forest,
+                            modifier = Modifier.size(15.dp)
                         )
                     }
 
-                    OutlinedTextField(
-                        value = replyInput,
-                        onValueChange = { replyInput = it },
-                        placeholder = {
-                            Text(
-                                text = "Reply on ${message.platform.displayName}...",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        },
-                        shape = RoundedCornerShape(24.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = M3SurfaceContainerHigh,
-                            unfocusedContainerColor = M3SurfaceContainerHigh,
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = Color.Transparent
-                        ),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(
-                            onSend = {
-                                if (replyInput.isNotBlank() || pendingAttachment != null) {
-                                    onSendReply(replyInput)
-                                    replyInput = ""
-                                }
-                            }
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(replyFocusRequester)
+                    // Attach file button
+                    AirframeIconButton(
+                        icon = Icons.Default.AttachFile,
+                        contentDescription = "Attach file or photo",
+                        style = AirframeIconButtonStyle.SURFACE,
+                        onClick = onPickAttachment
                     )
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    // `af-field` (Exclusively uses device default keyboard)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(AirframeSpace.sizeTouch)
+                            .clip(CircleShape)
+                            .background(c.surface)
+                            .padding(horizontal = AirframeSpace.space4),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (replyInput.isEmpty()) {
+                            Text(
+                                text = "Message $firstName…",
+                                style = AirframeType.body,
+                                color = c.textMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        BasicTextField(
+                            value = replyInput,
+                            onValueChange = { replyInput = it },
+                            singleLine = true,
+                            textStyle = AirframeType.body.copy(color = c.ink),
+                            cursorBrush = SolidColor(c.forest),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                            keyboardActions = KeyboardActions(
+                                onSend = {
+                                    if (replyInput.isNotBlank() || pendingAttachment != null) {
+                                        onSendReply(replyInput)
+                                        replyInput = ""
+                                    }
+                                }
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(replyFocusRequester)
+                        )
+                    }
 
-                    FilledIconButton(
+                    // `af-iconbtn af-iconbtn--filled` Send button (Upward arrow per `Composer/preview.html`)
+                    AirframeIconButton(
+                        icon = Icons.Default.ArrowUpward,
+                        contentDescription = "Send",
+                        style = AirframeIconButtonStyle.FILLED,
                         onClick = {
                             if (replyInput.isNotBlank() || pendingAttachment != null) {
                                 onSendReply(replyInput)
@@ -585,242 +713,99 @@ fun ConversationContextSheet(
                                 } catch (_: Exception) {
                                 }
                             }
-                        },
-                        modifier = Modifier.size(46.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send Reply"
-                        )
-                    }
+                        }
+                    )
                 }
+
+                // Bottom caption line (`af-row-time`)
+                Text(
+                    text = "$firstName is active on ${activeReplyPlatform.displayName}, so your reply goes there.",
+                    style = AirframeType.caption,
+                    color = c.textMuted
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ConversationBubbleItem(
+private fun AirframeMessageBubbleItem(
     turn: ConversationTurn,
     onAttachmentClick: () -> Unit
 ) {
+    val c = AirframeTheme.colors
+    val isOut = turn.isFromMe
+
+    val bubbleShape = if (isOut) {
+        RoundedCornerShape(
+            topStart = AirframeSpace.radiusXl,
+            topEnd = AirframeSpace.radiusXl,
+            bottomStart = AirframeSpace.radiusXl,
+            bottomEnd = AirframeSpace.radiusXs
+        )
+    } else {
+        RoundedCornerShape(
+            topStart = AirframeSpace.radiusXl,
+            topEnd = AirframeSpace.radiusXl,
+            bottomStart = AirframeSpace.radiusXs,
+            bottomEnd = AirframeSpace.radiusXl
+        )
+    }
+
+    val metaLabel = buildString {
+        append(turn.platform.displayName)
+        append(" · ")
+        append(turn.timestampLabel)
+        if (isOut) append(" · Read")
+    }.uppercase(Locale.US)
+
     Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = if (turn.isFromMe) Alignment.End else Alignment.Start
+        horizontalAlignment = if (isOut) Alignment.End else Alignment.Start,
+        verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        Surface(
-            color = if (turn.isFromMe) MaterialTheme.colorScheme.primaryContainer else M3SurfaceContainerHigh,
-            shape = RoundedCornerShape(
-                topStart = 18.dp,
-                topEnd = 18.dp,
-                bottomStart = if (turn.isFromMe) 18.dp else 4.dp,
-                bottomEnd = if (turn.isFromMe) 4.dp else 18.dp
-            ),
-            modifier = Modifier.widthIn(max = 320.dp)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+        // Text bubble (`af-bubble`)
+        if (turn.text.isNotBlank()) {
+            Box(
+                modifier = Modifier
+                    .widthIn(max = 310.dp)
+                    .clip(bubbleShape)
+                    .background(if (isOut) c.forest else c.surface)
+                    .padding(horizontal = 15.dp, vertical = 12.dp)
+            ) {
                 Text(
                     text = turn.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (turn.isFromMe) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                    lineHeight = 20.sp
+                    style = AirframeType.body,
+                    color = if (isOut) c.onForest else c.text
                 )
-
-                // Render any attachments inside this conversation turn
-                if (turn.attachments.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        turn.attachments.forEach { att ->
-                            Surface(
-                                color = M3SurfaceContainer,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onAttachmentClick() }
-                            ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    if (att.previewBitmap != null) {
-                                        Image(
-                                            bitmap = att.previewBitmap.asImageBitmap(),
-                                            contentDescription = att.fileName,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(140.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                    }
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = iconForAttachmentType(att.type),
-                                            contentDescription = att.fileName,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = att.fileName,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSurface,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Text(
-                                                text = att.fileSizeLabel,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = "${turn.senderName} · ${turn.timestampLabel}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 4.dp)
-        )
-    }
-}
-
-/**
- * Person-Centric Unified Thread Card (Material 3).
- * Merges conversations from the same contact across WhatsApp, Teams, Outlook, SMS, etc.
- */
-@Composable
-fun PersonUnifiedThreadCard(
-    thread: PersonUnifiedThread,
-    onOpenMessageConversation: (String) -> Unit,
-    onArchiveAllFromPerson: () -> Unit
-) {
-    ElevatedCard(
-        shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(M3SurfaceContainer)
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        // Attachment bubble (`af-file` inside `af-bubble` container)
+        if (turn.attachments.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 300.dp)
+                    .clip(bubbleShape)
+                    .background(c.surface)
+                    .padding(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(thread.avatarColor),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = thread.senderInitials,
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = thread.senderName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "${thread.messages.size} conversations across ${thread.activePlatforms.joinToString(", ") { it.displayName }}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                IconButton(onClick = onArchiveAllFromPerson) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Mark All Done",
-                        tint = Color(0xFF34D399)
+                turn.attachments.forEach { att ->
+                    AirframeAttachmentTile(
+                        attachment = att,
+                        onActionClick = onAttachmentClick
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                thread.messages.forEach { msg ->
-                    Surface(
-                        color = M3SurfaceContainerHigh,
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpenMessageConversation(msg.id) }
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    color = msg.platform.containerColor,
-                                    shape = CircleShape
-                                ) {
-                                    Text(
-                                        text = msg.platform.displayName,
-                                        color = msg.platform.accentColor,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                    )
-                                }
-                                Text(
-                                    text = msg.relativeTimeLabel,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            if (!msg.subject.isNullOrBlank()) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = msg.subject,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = msg.body,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-            }
         }
-    }
-}
 
-private fun iconForAttachmentType(type: AttachmentType) = when (type) {
-    AttachmentType.IMAGE -> Icons.Default.Image
-    AttachmentType.SPREADSHEET -> Icons.Default.TableChart
-    else -> Icons.Default.Description
+        // Uppercase `af-meta`
+        Text(
+            text = metaLabel,
+            style = AirframeType.meta,
+            color = c.textMuted,
+            modifier = Modifier.padding(horizontal = AirframeSpace.space1)
+        )
+    }
 }

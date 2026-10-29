@@ -10,6 +10,7 @@ import android.provider.Settings
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -22,9 +23,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -34,36 +37,21 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.BatteryChargingFull
-import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Inbox
-import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -71,7 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -81,170 +69,101 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.clicks.omnihub.model.HubViewMode
 import com.clicks.omnihub.model.InstalledAppInfo
-import com.clicks.omnihub.ui.theme.M3SurfaceContainer
-import com.clicks.omnihub.ui.theme.M3SurfaceContainerHigh
+import com.clicks.omnihub.ui.theme.AirframeSpace
+import com.clicks.omnihub.ui.theme.AirframeTheme
+import com.clicks.omnihub.ui.theme.AirframeType
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 /**
- * Clean Material 3 Bottom NavigationBar with 4 primary Smartphone Launcher destinations:
- * - Inbox (Unified Communication Hub)
- * - People (Person-Centric Threads)
- * - Widgets (Dedicated Bottom Panel / Page for System & Glanceable Widgets)
- * - Apps (Full Smartphone App Drawer with Real Icons & Favorites)
+ * Airframe `TabBar` (`TabBar/preview.html`).
+ * - 4 primary destinations (`Inbox`, `People`, `Widgets`, `Apps`).
+ * - Height `80dp` (`size-tabbar`) on `surface-raised` with a 1px top hairline in `line`.
+ * - Active tab uses `forest` color, filled icon, `600` weight caption, and a `5dp` `forest` dot (`af-tab-dot`) underneath.
+ * - Inactive tabs use `text-muted`, outline icon, and a transparent `5dp` dot underneath.
  */
 @Composable
-fun OmniHubBottomNavigationBar(
+fun AirframeTabBar(
     currentMode: HubViewMode,
     onSelectMode: (HubViewMode) -> Unit
 ) {
-    NavigationBar(
-        containerColor = M3SurfaceContainer
+    val c = AirframeTheme.colors
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(c.surfaceRaised)
     ) {
-        HubViewMode.entries.forEach { mode ->
-            val selected = mode == currentMode
-            val icon = when (mode) {
-                HubViewMode.STREAM -> Icons.Default.Inbox
-                HubViewMode.PEOPLE -> Icons.Default.Group
-                HubViewMode.WIDGETS -> Icons.Default.Widgets
-                HubViewMode.APPS -> Icons.Default.Apps
-            }
-            NavigationBarItem(
-                selected = selected,
-                onClick = { onSelectMode(mode) },
-                icon = {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = mode.label
-                    )
-                },
-                label = {
-                    Text(
-                        text = mode.label,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                    )
-                }
-            )
-        }
-    }
-}
-
-/**
- * Compact Smartphone Favorites Dock shown above the bottom NavigationBar on the Inbox stream
- * so the user always has 1-tap access to Phone, Camera, Browser, Widgets, and Apps without
- * losing the smartphone experience.
- */
-@Composable
-fun QuickSmartphoneFavoritesBar(
-    favoriteApps: List<InstalledAppInfo>,
-    onLaunchApp: (InstalledAppInfo) -> Unit,
-    onOpenDialer: () -> Unit,
-    onOpenCamera: () -> Unit,
-    onOpenBrowser: () -> Unit,
-    onOpenWidgetsPage: () -> Unit,
-    onOpenAppsDrawer: () -> Unit
-) {
-    Surface(
-        color = M3SurfaceContainer.copy(alpha = 0.95f),
-        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
-        tonalElevation = 2.dp,
-        modifier = Modifier.fillMaxWidth()
-    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(c.line)
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .height(AirframeSpace.sizeTabbar)
+                .padding(top = 10.dp, bottom = 14.dp, start = 8.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (favoriteApps.take(4).size >= 3) {
-                favoriteApps.take(4).forEach { app ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { onLaunchApp(app) }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        AppIconAvatar(app = app, sizeDp = 38)
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = app.label,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+            HubViewMode.entries.forEach { mode ->
+                val selected = mode == currentMode
+                val icon = when (mode) {
+                    HubViewMode.STREAM -> if (selected) Icons.Filled.Inbox else Icons.Outlined.Inbox
+                    HubViewMode.PEOPLE -> if (selected) Icons.Filled.Group else Icons.Outlined.Group
+                    HubViewMode.WIDGETS -> if (selected) Icons.Filled.Widgets else Icons.Outlined.Widgets
+                    HubViewMode.APPS -> if (selected) Icons.Filled.Apps else Icons.Outlined.Apps
                 }
-            } else {
-                QuickDockActionItem(icon = Icons.Default.Phone, label = "Phone", onClick = onOpenDialer)
-                QuickDockActionItem(icon = Icons.Default.Public, label = "Browser", onClick = onOpenBrowser)
-                QuickDockActionItem(icon = Icons.Default.CameraAlt, label = "Camera", onClick = onOpenCamera)
-            }
+                val itemColor = if (selected) c.forest else c.textMuted
 
-            QuickDockActionItem(
-                icon = Icons.Default.Widgets,
-                label = "Widgets",
-                onClick = onOpenWidgetsPage
-            )
-            QuickDockActionItem(
-                icon = Icons.Default.Apps,
-                label = "All Apps",
-                onClick = onOpenAppsDrawer
-            )
-        }
-    }
-}
-
-@Composable
-private fun QuickDockActionItem(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-    ) {
-        Surface(
-            color = M3SurfaceContainerHigh,
-            shape = CircleShape,
-            modifier = Modifier.size(38.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = AirframeSpace.sizeTouch)
+                        .clip(RoundedCornerShape(AirframeSpace.radiusMd))
+                        .clickable { onSelectMode(mode) }
+                        .padding(vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = mode.label,
+                        tint = itemColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = mode.label,
+                        style = AirframeType.caption.copy(
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                        ),
+                        color = itemColor,
+                        maxLines = 1
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(5.dp)
+                            .clip(CircleShape)
+                            .background(if (selected) c.forest else Color.Transparent)
+                    )
+                }
             }
         }
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
-        )
     }
 }
 
 /**
- * Dedicated Material 3 Widgets Panel Page (`Widgets` destination).
- * Combines:
- * 1. Native Android System Widgets (`AppWidgetManager` + `AppWidgetHostView`) that the user can pick
- *    from any installed app on their S23 Ultra (Weather, Spotify, Calendar, Samsung Clock, etc.)
- * 2. Built-in Glanceable Material 3 Widgets:
- *    - At-a-Glance Date, Weather & Next Calendar Event
- *    - Device Control Center (Wi-Fi, Bluetooth, Battery %, Clock/Alarms, System Settings)
- *    - Quick Pinned Scratchpad Note
+ * Airframe Widgets Panel (`Widgets` tab).
+ * Strictly follows Airframe editorial rules:
+ * - Single-column scroll (`space-gutter` 26dp horizontal padding) directly on `ground`, separated by 1px `line` hairlines.
+ * - Leads with a single `numeral-xl` hero figure (`72 °F`) + `sage-soft` pill + light `lede` agenda line.
+ * - Includes an Airframe `CapsuleStrip` week rhythm bar.
+ * - Includes an Airframe `Feature` + `StatPair` section with the screen's single `forest` primary button ("Add system widget →")
+ *   plus native Android `AppWidgetHostView` support and a `sage-wash` pinned scratchpad (`Callout`).
  */
 @Composable
 fun DedicatedWidgetsDashboardPage(
@@ -257,49 +176,286 @@ fun DedicatedWidgetsDashboardPage(
     onRemoveSystemWidget: (Int) -> Unit,
     onOpenSystemAction: (String) -> Unit
 ) {
+    val c = AirframeTheme.colors
     val context = LocalContext.current
     val batteryPct = remember { readBatteryPercentage(context) }
-    val dateTitle = remember { SimpleDateFormat("EEEE, MMMM d", Locale.US).format(Date()) }
     val timeTitle = remember { SimpleDateFormat("h:mm a", Locale.US).format(Date()) }
+    val weekDays = remember { buildCurrentWeekStrip() }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        modifier = Modifier
+            .fillMaxSize()
+            .background(c.ground),
+        contentPadding = PaddingValues(horizontal = AirframeSpace.gutter, vertical = 14.dp)
     ) {
-        // Header + "+ Add System Widget" Button
-        item(key = "widgets_header_row") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Widgets Panel",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Text(
-                        text = "Glanceable tools & native Android widgets",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+        // 1. Airframe Hero `Metric` Section (One serif figure per screen: 72 °F)
+        item(key = "widgets_airframe_hero_metric") {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                AirframeEyebrow(
+                    label = "Today's glance",
+                    aside = "$timeTitle · Alarms →",
+                    onAsideClick = { onOpenSystemAction(AlarmClock.ACTION_SHOW_ALARMS) }
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            text = "72",
+                            style = AirframeType.numeralXl,
+                            color = c.ink
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "°F",
+                            style = AirframeType.numeralUnit,
+                            color = c.text,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .padding(bottom = 6.dp)
+                            .height(36.dp)
+                            .clip(CircleShape)
+                            .background(c.sageSoft)
+                            .clickable { onOpenSystemAction(Intent.ACTION_MAIN) }
+                            .padding(horizontal = AirframeSpace.space4),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Clear · H 76° L 58°",
+                            style = AirframeType.body.copy(fontWeight = FontWeight.SemiBold),
+                            color = c.forest
+                        )
+                    }
                 }
-                Button(onClick = onAddSystemWidgetClick) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add System Widget",
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Add Widget")
+
+                Spacer(modifier = Modifier.height(AirframeSpace.space4))
+
+                Text(
+                    text = "Next at 10:30 AM — Q4 Board Deck Sign-Off & Forecast Sync.",
+                    style = AirframeType.lede,
+                    color = c.text
+                )
+            }
+        }
+
+        // 2. Signature Airframe `CapsuleStrip` ("This Week")
+        item(key = "widgets_week_capsule_strip") {
+            AirframeRule()
+            Column(modifier = Modifier.fillMaxWidth()) {
+                AirframeEyebrow(label = "This week")
+                Spacer(modifier = Modifier.height(AirframeSpace.space4))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    weekDays.forEach { day ->
+                        val barColor = when {
+                            day.isToday -> c.forest
+                            day.isPast -> c.capsuleDone
+                            else -> c.track
+                        }
+                        val barHeight = if (day.isToday) AirframeSpace.sizeCapsuleCurrentHeight else AirframeSpace.sizeCapsuleHeight
+                        val labelColor = when {
+                            day.isToday -> c.ink
+                            day.isPast -> c.text
+                            else -> c.textMuted
+                        }
+                        val weight = if (day.isToday) FontWeight.Bold else FontWeight.Normal
+
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.widthIn(min = 38.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.height(AirframeSpace.sizeCapsuleCurrentHeight),
+                                contentAlignment = Alignment.BottomCenter
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(AirframeSpace.sizeCapsuleWidth)
+                                        .height(barHeight)
+                                        .clip(CircleShape)
+                                        .background(barColor)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = day.shortDayName,
+                                style = AirframeType.caption.copy(fontWeight = weight),
+                                color = labelColor
+                            )
+                            Text(
+                                text = day.dayNumber,
+                                style = AirframeType.caption.copy(fontWeight = weight),
+                                color = labelColor
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // 1. User-Added Native Android System Widgets (AppWidgetHostView)
+        // 3. Airframe `Feature` + `StatPair` Section (Single `forest` primary action: "Add system widget →")
+        item(key = "widgets_feature_and_stats") {
+            AirframeRule()
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "DEVICE & SYSTEM WIDGETS",
+                    style = AirframeType.eyebrow,
+                    color = c.textMuted
+                )
+                Spacer(modifier = Modifier.height(AirframeSpace.space3))
+                Text(
+                    text = "Native Android Widgets & Quick Controls",
+                    style = AirframeType.titleLg,
+                    color = c.ink
+                )
+                Spacer(modifier = Modifier.height(AirframeSpace.space2))
+                Text(
+                    text = "Pin interactive widgets from Weather, Calendar, Spotify, or Samsung Clock directly onto this page.",
+                    style = AirframeType.lede,
+                    color = c.text
+                )
+
+                Spacer(modifier = Modifier.height(AirframeSpace.space5))
+
+                // Screen's single `forest` primary button (`af-btn af-btn--block`)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(AirframeSpace.sizeButton)
+                        .clip(RoundedCornerShape(AirframeSpace.radiusLg))
+                        .background(c.forest)
+                        .clickable { onAddSystemWidgetClick() }
+                        .padding(horizontal = AirframeSpace.gutter),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Add system widget",
+                        style = AirframeType.button,
+                        color = c.onForest
+                    )
+                    Spacer(modifier = Modifier.width(AirframeSpace.space3))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = c.onForest,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(22.dp))
+
+                // `af-stats` StatPair (Battery & Connectivity)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onOpenSystemAction(Intent.ACTION_POWER_USAGE_SUMMARY) }
+                            .padding(end = AirframeSpace.space3),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BatteryChargingFull,
+                            contentDescription = "Battery",
+                            tint = c.text,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Battery",
+                                style = AirframeType.bodyLight,
+                                color = c.textMuted
+                            )
+                            Text(
+                                text = "$batteryPct%",
+                                style = AirframeType.statValue,
+                                color = c.ink
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(42.dp)
+                            .background(c.line)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onOpenSystemAction(Settings.ACTION_WIFI_SETTINGS) }
+                            .padding(start = AirframeSpace.space5),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Wifi,
+                            contentDescription = "Wi-Fi",
+                            tint = c.text,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Network",
+                                style = AirframeType.bodyLight,
+                                color = c.textMuted
+                            )
+                            Text(
+                                text = "Online",
+                                style = AirframeType.statValue,
+                                color = c.ink
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(AirframeSpace.space4))
+
+                // System Quick Settings Chips (`af-chip`)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AirframeChip(
+                        label = "Wi-Fi",
+                        onClick = { onOpenSystemAction(Settings.ACTION_WIFI_SETTINGS) }
+                    )
+                    AirframeChip(
+                        label = "Bluetooth",
+                        onClick = { onOpenSystemAction(Settings.ACTION_BLUETOOTH_SETTINGS) }
+                    )
+                    AirframeChip(
+                        label = "Alarms",
+                        onClick = { onOpenSystemAction(AlarmClock.ACTION_SHOW_ALARMS) }
+                    )
+                    AirframeChip(
+                        label = "System Settings",
+                        onClick = { onOpenSystemAction(Settings.ACTION_SETTINGS) }
+                    )
+                }
+            }
+        }
+
+        // 4. User-Added Native Android System Widgets (`AppWidgetHostView`)
         items(
             items = hostedWidgetIds,
             key = { "sys_widget_$it" }
@@ -313,38 +469,33 @@ fun DedicatedWidgetsDashboardPage(
             }
 
             if (providerInfo != null) {
-                ElevatedCard(
-                    shape = RoundedCornerShape(22.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
+                AirframeRule()
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = (providerInfo.loadLabel(context.packageManager) ?: "ANDROID WIDGET").uppercase(Locale.US),
+                            style = AirframeType.eyebrow,
+                            color = c.textMuted
+                        )
+                        AirframeIconButton(
+                            icon = Icons.Default.Close,
+                            contentDescription = "Remove widget",
+                            style = AirframeIconButtonStyle.OUTLINE,
+                            onClick = { onRemoveSystemWidget(appWidgetId) }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(M3SurfaceContainer)
+                            .clip(RoundedCornerShape(AirframeSpace.radiusXl))
+                            .background(c.surface)
                             .padding(12.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = providerInfo.loadLabel(context.packageManager) ?: "Android Widget",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            IconButton(
-                                onClick = { onRemoveSystemWidget(appWidgetId) },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Remove Widget",
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
                         AndroidView(
                             factory = { ctx ->
                                 appWidgetHost.createView(ctx, appWidgetId, providerInfo).apply {
@@ -353,279 +504,56 @@ fun DedicatedWidgetsDashboardPage(
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(providerInfo.minHeight.coerceIn(120, 320).dp)
+                                .height(providerInfo.minHeight.coerceIn(130, 320).dp)
                         )
                     }
                 }
             }
         }
 
-        // 2. Built-in Material 3 "At a Glance" Clock, Weather & Next Meeting Widget
-        item(key = "builtin_at_a_glance_widget") {
-            ElevatedCard(
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+        // 5. Airframe `Callout` Pinned Scratchpad (`sage-wash`, uses native device keyboard)
+        item(key = "widgets_scratchpad_callout") {
+            AirframeRule()
+            Column(modifier = Modifier.fillMaxWidth()) {
+                AirframeEyebrow(
+                    label = "Pinned scratchpad",
+                    aside = "Device keyboard"
+                )
+                Spacer(modifier = Modifier.height(AirframeSpace.space3))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(M3SurfaceContainer)
-                        .padding(18.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            modifier = Modifier.clickable {
-                                onOpenSystemAction(AlarmClock.ACTION_SHOW_ALARMS)
-                            }
-                        ) {
-                            Text(
-                                text = timeTitle,
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = dateTitle,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.WbSunny,
-                                    contentDescription = "Weather",
-                                    tint = Color(0xFFFBBF24),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
-                                        text = "72°F · Clear",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                    Text(
-                                        text = "H: 76° · L: 58°",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Next Agenda Event Pill
-                    Surface(
-                        color = M3SurfaceContainerHigh,
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpenSystemAction(Intent.ACTION_MAIN) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CalendarMonth,
-                                contentDescription = "Next Event",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "UP NEXT · 10:30 AM",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Q4 Board Deck Sign-Off & Forecast Sync",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 3. Built-in Material 3 Device Status & Quick Settings Tiles Widget
-        item(key = "builtin_quick_settings_widget") {
-            ElevatedCard(
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(M3SurfaceContainer)
-                        .padding(18.dp)
+                        .clip(RoundedCornerShape(AirframeSpace.radiusXl))
+                        .background(c.sageWash)
+                        .padding(horizontal = AirframeSpace.space4, vertical = 14.dp)
                 ) {
                     Text(
-                        text = "Device Quick Controls",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        WidgetControlTile(
-                            icon = Icons.Default.Wifi,
-                            title = "Internet",
-                            subtitle = "Connected",
-                            modifier = Modifier.weight(1f),
-                            onClick = { onOpenSystemAction(Settings.ACTION_WIFI_SETTINGS) }
-                        )
-                        WidgetControlTile(
-                            icon = Icons.Default.Bluetooth,
-                            title = "Bluetooth",
-                            subtitle = "Devices",
-                            modifier = Modifier.weight(1f),
-                            onClick = { onOpenSystemAction(Settings.ACTION_BLUETOOTH_SETTINGS) }
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        WidgetControlTile(
-                            icon = Icons.Default.BatteryChargingFull,
-                            title = "Battery",
-                            subtitle = "$batteryPct% Remaining",
-                            modifier = Modifier.weight(1f),
-                            onClick = { onOpenSystemAction(Intent.ACTION_POWER_USAGE_SUMMARY) }
-                        )
-                        WidgetControlTile(
-                            icon = Icons.Default.Settings,
-                            title = "Settings",
-                            subtitle = "System",
-                            modifier = Modifier.weight(1f),
-                            onClick = { onOpenSystemAction(Settings.ACTION_SETTINGS) }
-                        )
-                    }
-                }
-            }
-        }
-
-        // 4. Built-in Quick Scratchpad Note Widget (Uses Native Device Keyboard)
-        item(key = "builtin_scratchpad_widget") {
-            ElevatedCard(
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(M3SurfaceContainer)
-                        .padding(18.dp)
-                ) {
-                    Text(
-                        text = "Quick Pinned Note",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = "QUICK NOTES & REMINDERS",
+                        style = AirframeType.meta.copy(color = c.forest, fontWeight = FontWeight.Bold),
+                        color = c.forest
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
+                    BasicTextField(
                         value = quickNoteText,
                         onValueChange = onUpdateQuickNote,
-                        placeholder = { Text("Jot down quick notes, numbers, or tasks...") },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = M3SurfaceContainerHigh,
-                            unfocusedContainerColor = M3SurfaceContainerHigh,
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = Color.Transparent
-                        ),
-                        modifier = Modifier.fillMaxWidth()
+                        textStyle = AirframeType.body.copy(color = c.ink),
+                        cursorBrush = SolidColor(c.forest),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 76.dp)
                     )
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun WidgetControlTile(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Surface(
-        color = M3SurfaceContainerHigh,
-        shape = RoundedCornerShape(16.dp),
-        modifier = modifier.clickable { onClick() }
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = CircleShape,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = title,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(10.dp))
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
+                Spacer(modifier = Modifier.height(AirframeSpace.space6))
             }
         }
     }
 }
 
 /**
- * Full Smartphone Material 3 App Drawer (`Apps` destination).
- * Features:
- * - Real Full-Color App Icons (`ImageBitmap`) extracted from `PackageManager`
- * - Pinned Favorites Row at top
- * - Category Filter Chips (`All`, `Communication`, `Productivity`, `Media`, `Tools`)
- * - Responsive 4-Column App Grid (Tap to launch, Long-press for App Info)
+ * Airframe Smartphone Application Directory (`Apps` tab).
+ * - Preserves the full smartphone experience with real app icons (`loadIcon(pm)`),
+ *   pinned essential favorites, and a 4-column responsive app grid.
+ * - Styled strictly with Airframe `ground`, 1px `line` hairlines, `AirframeEyebrow`, and `AirframeChip`.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -638,6 +566,7 @@ fun SmartphoneAppDrawerGridPage(
     onLongPressApp: (InstalledAppInfo) -> Unit,
     onOpenDefaultLauncherSettings: () -> Unit
 ) {
+    val c = AirframeTheme.colors
     val categories = listOf("All", "Communication", "Productivity", "Media", "Tools")
 
     val filteredApps = remember(installedApps, selectedCategory, searchQuery) {
@@ -655,124 +584,80 @@ fun SmartphoneAppDrawerGridPage(
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(4),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        modifier = Modifier
+            .fillMaxSize()
+            .background(c.ground),
+        contentPadding = PaddingValues(horizontal = AirframeSpace.gutter, vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Category Filter Chips Bar
+        // 1. Airframe Eyebrow + Category Chips
         item(
-            key = "app_categories_bar",
+            key = "app_categories_header",
             span = { GridItemSpan(maxLineSpan) }
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                categories.forEach { cat ->
-                    val selected = cat == selectedCategory
-                    FilterChip(
-                        selected = selected,
-                        onClick = { onSelectCategory(cat) },
-                        label = {
-                            Text(
-                                text = cat,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        },
-                        shape = CircleShape,
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            containerColor = M3SurfaceContainer
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            enabled = true,
-                            selected = selected,
-                            borderColor = Color.Transparent
+            Column(modifier = Modifier.fillMaxWidth()) {
+                AirframeEyebrow(
+                    label = "Applications",
+                    aside = "Set default home →",
+                    onAsideClick = onOpenDefaultLauncherSettings
+                )
+                Spacer(modifier = Modifier.height(AirframeSpace.space3))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    categories.forEach { cat ->
+                        AirframeChip(
+                            label = cat,
+                            selected = cat == selectedCategory,
+                            onClick = { onSelectCategory(cat) }
                         )
-                    )
+                    }
                 }
             }
         }
 
-        // 2. Pinned Favorites Card (when viewing "All" without search filter)
+        // 2. Essential Favorites Section (separated by Airframe hairline, never inside a heavy card)
         if (selectedCategory == "All" && searchQuery.isBlank() && favoriteApps.isNotEmpty()) {
             item(
-                key = "favorites_section_header",
+                key = "favorites_hairline_section",
                 span = { GridItemSpan(maxLineSpan) }
             ) {
-                ElevatedCard(
-                    shape = RoundedCornerShape(22.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    AirframeRule()
+                    AirframeEyebrow(
+                        label = "Essential favorites",
+                        aside = "${favoriteApps.size} pinned"
+                    )
+                    Spacer(modifier = Modifier.height(AirframeSpace.space4))
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(M3SurfaceContainer)
-                            .padding(14.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(18.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Star,
-                                    contentDescription = "Favorites",
-                                    tint = Color(0xFFFBBF24),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
+                        favoriteApps.forEach { favApp ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .width(64.dp)
+                                    .clip(RoundedCornerShape(AirframeSpace.radiusMd))
+                                    .clickable { onLaunchApp(favApp) }
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                AppIconAvatar(app = favApp, sizeDp = 48)
+                                Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "Essential Favorites",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    text = favApp.label,
+                                    style = AirframeType.caption,
+                                    color = c.ink,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center
                                 )
-                            }
-                            AssistChip(
-                                onClick = onOpenDefaultLauncherSettings,
-                                label = {
-                                    Text(
-                                        text = "Set Default Home",
-                                        style = MaterialTheme.typography.labelSmall
-                                    )
-                                }
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            favoriteApps.forEach { favApp ->
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .width(64.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .clickable { onLaunchApp(favApp) }
-                                        .padding(vertical = 4.dp)
-                                ) {
-                                    AppIconAvatar(app = favApp, sizeDp = 48)
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = favApp.label,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
                             }
                         }
                     }
@@ -780,17 +665,18 @@ fun SmartphoneAppDrawerGridPage(
             }
         }
 
-        // 3. All Installed Apps Section Header
+        // 3. All Applications Hairline + Eyebrow Header
         item(
-            key = "all_apps_count_header",
+            key = "all_apps_eyebrow_header",
             span = { GridItemSpan(maxLineSpan) }
         ) {
-            Text(
-                text = "All Applications (${filteredApps.size}) · Hold icon for App Info",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-            )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                AirframeRule()
+                AirframeEyebrow(
+                    label = "All applications (${filteredApps.size})",
+                    aside = "Hold icon for info"
+                )
+            }
         }
 
         // 4. 4-Column Real Icon App Grid
@@ -802,24 +688,22 @@ fun SmartphoneAppDrawerGridPage(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(AirframeSpace.radiusMd))
                     .combinedClickable(
                         onClick = { onLaunchApp(app) },
                         onLongClick = { onLongPressApp(app) }
                     )
-                    .padding(vertical = 8.dp, horizontal = 4.dp)
+                    .padding(vertical = 6.dp, horizontal = 2.dp)
             ) {
-                AppIconAvatar(app = app, sizeDp = 54)
+                AppIconAvatar(app = app, sizeDp = 52)
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = app.label,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = AirframeType.caption,
+                    color = c.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    fontSize = 12.sp
+                    textAlign = TextAlign.Center
                 )
             }
         }
@@ -831,6 +715,7 @@ fun AppIconAvatar(
     app: InstalledAppInfo,
     sizeDp: Int
 ) {
+    val c = AirframeTheme.colors
     if (app.iconBitmap != null) {
         Image(
             bitmap = app.iconBitmap,
@@ -840,20 +725,48 @@ fun AppIconAvatar(
                 .clip(RoundedCornerShape((sizeDp / 4).dp))
         )
     } else {
-        Surface(
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shape = RoundedCornerShape((sizeDp / 3).dp),
-            modifier = Modifier.size(sizeDp.dp)
+        Box(
+            modifier = Modifier
+                .size(sizeDp.dp)
+                .clip(RoundedCornerShape((sizeDp / 3).dp))
+                .background(c.sage)
+                .border(1.dp, c.line, RoundedCornerShape((sizeDp / 3).dp)),
+            contentAlignment = Alignment.Center
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = app.label.take(2).uppercase(),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
+            Text(
+                text = app.label.take(2).uppercase(Locale.US),
+                style = AirframeType.body.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+                color = c.forest
+            )
         }
+    }
+}
+
+private data class WeekDayCapsuleItem(
+    val shortDayName: String,
+    val dayNumber: String,
+    val isToday: Boolean,
+    val isPast: Boolean
+)
+
+private fun buildCurrentWeekStrip(): List<WeekDayCapsuleItem> {
+    val cal = Calendar.getInstance()
+    val todayDayOfYear = cal.get(Calendar.DAY_OF_YEAR)
+    cal.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+    val dayFormat = SimpleDateFormat("EEE", Locale.US)
+    val numFormat = SimpleDateFormat("d", Locale.US)
+
+    return (0 until 7).map { offset ->
+        val dayCal = (cal.clone() as Calendar).apply {
+            add(Calendar.DAY_OF_MONTH, offset)
+        }
+        val dYear = dayCal.get(Calendar.DAY_OF_YEAR)
+        WeekDayCapsuleItem(
+            shortDayName = dayFormat.format(dayCal.time),
+            dayNumber = numFormat.format(dayCal.time),
+            isToday = dYear == todayDayOfYear,
+            isPast = dYear < todayDayOfYear
+        )
     }
 }
 
