@@ -2,7 +2,6 @@ package com.clicks.omnihub.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -15,22 +14,34 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,342 +49,237 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.clicks.omnihub.model.HubViewMode
+import com.clicks.omnihub.model.HubAttachment
 import com.clicks.omnihub.model.MessagingPlatform
-import com.clicks.omnihub.ui.theme.ClicksOrange
-import com.clicks.omnihub.ui.theme.ObsidianBorder
-import com.clicks.omnihub.ui.theme.ObsidianCard
-import com.clicks.omnihub.ui.theme.ObsidianSurface
-import com.clicks.omnihub.ui.theme.TextMuted
-import com.clicks.omnihub.ui.theme.TextPrimary
-import com.clicks.omnihub.ui.theme.TextSecondary
+import com.clicks.omnihub.ui.theme.M3SurfaceContainer
+import com.clicks.omnihub.ui.theme.M3SurfaceContainerHigh
 
 /**
- * Ultra-clean, single-line Top Header + Mode Tabs designed to maximize screen real estate
- * on tall flagship displays like the Samsung Galaxy S23 Ultra.
+ * Clean Material 3 Top App Header + Universal Omnibox Search Bar + Platform FilterChips.
+ * Exclusively uses the device's native system keyboard (`SoftwareKeyboardController`).
  */
 @Composable
-fun CommunicatorHeaderBar(
+fun MaterialOmniboxTopBar(
     unreadCount: Int,
-    activeLedColor: Color,
     isLiveBridgeConnected: Boolean,
-    currentViewMode: HubViewMode,
-    onSelectViewMode: (HubViewMode) -> Unit,
-    onOpenLiveBridgeSettings: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .wrapContentHeight()
-            .background(ObsidianSurface)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        // Compact Single-Line Status Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
-            ) {
-                // Clicks Dynamic Notification LED indicator
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(activeLedColor)
-                        .border(1.5.dp, Color.White.copy(alpha = 0.3f), CircleShape)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "OMNIHUB",
-                    color = TextPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 1.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(ClicksOrange.copy(alpha = 0.18f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "$unreadCount UNREAD",
-                        color = ClicksOrange,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Compact Live Bridge Status Pill (never wraps to 2 lines)
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(
-                        if (isLiveBridgeConnected) Color(0x2610B981) else Color(0x26F59E0B)
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = if (isLiveBridgeConnected) Color(0xFF10B981).copy(alpha = 0.4f) else Color(0xFFF59E0B).copy(alpha = 0.4f),
-                        shape = RoundedCornerShape(6.dp)
-                    )
-                    .clickable { onOpenLiveBridgeSettings() }
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
-            ) {
-                Text(
-                    text = if (isLiveBridgeConnected) "● LIVE BRIDGE" else "● ENABLE LIVE",
-                    color = if (isLiveBridgeConnected) Color(0xFF34D399) else Color(0xFFFBBF24),
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    softWrap = false
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Sleek Single-Row Segmented Mode Tabs (Guaranteed single line on all font scales)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            val shortTabLabels = mapOf(
-                HubViewMode.STREAM to "Stream",
-                HubViewMode.PEOPLE to "People",
-                HubViewMode.VIP_FOCUS to "VIP",
-                HubViewMode.APPS to "Apps"
-            )
-
-            HubViewMode.entries.forEach { mode ->
-                val selected = mode == currentViewMode
-                val label = shortTabLabels[mode] ?: mode.label
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(if (selected) ClicksOrange else ObsidianCard)
-                        .border(
-                            width = 1.dp,
-                            color = if (selected) ClicksOrange else ObsidianBorder,
-                            shape = RoundedCornerShape(9.dp)
-                        )
-                        .clickable { onSelectViewMode(mode) }
-                        .padding(vertical = 6.dp, horizontal = 4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = label,
-                        color = if (selected) Color.White else TextSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Compact Universal Omnibox Command Bar & Channel Filter Pills.
- */
-@Composable
-fun OmniboxCommandBar(
     query: String,
     isComposerExpanded: Boolean,
     selectedPlatform: MessagingPlatform,
     platformCounts: Map<MessagingPlatform, Int>,
+    pendingAttachment: HubAttachment?,
     onQueryChange: (String) -> Unit,
     onClearQuery: () -> Unit,
     onToggleComposer: () -> Unit,
     onSelectPlatform: (MessagingPlatform) -> Unit,
-    onSendOmniboxMessage: (recipient: String, platform: MessagingPlatform, body: String) -> Unit
+    onPickAttachment: () -> Unit,
+    onClearPendingAttachment: () -> Unit,
+    onSendOmniboxMessage: (recipient: String, platform: MessagingPlatform, body: String) -> Unit,
+    onOpenLiveBridgeSettings: () -> Unit,
+    onResetDemo: () -> Unit
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val composeFocusRequester = remember { FocusRequester() }
+
     var recipientInput by remember { mutableStateOf("Sarah Jenkins") }
     var composePlatform by remember { mutableStateOf(MessagingPlatform.TEAMS) }
-    var messageBodyInput by remember { mutableStateOf("Slide 14 is approved — ready for the 10:30 AM call!") }
+    var messageBodyInput by remember { mutableStateOf("") }
+
+    LaunchedEffect(isComposerExpanded) {
+        if (isComposerExpanded) {
+            try {
+                composeFocusRequester.requestFocus()
+                keyboardController?.show()
+            } catch (_: Exception) {
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .wrapContentHeight()
-            .background(ObsidianSurface)
-            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // Compact Single-Line Omnibox Input Field
+        // 1. Clean Material 3 Header Row
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(ObsidianCard)
-                .border(
-                    width = 1.dp,
-                    color = if (query.isNotEmpty() || isComposerExpanded) ClicksOrange else ObsidianBorder,
-                    shape = RoundedCornerShape(10.dp)
-                )
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.Terminal,
-                contentDescription = "Omnibox Command",
-                tint = ClicksOrange,
-                modifier = Modifier.size(15.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Box(modifier = Modifier.weight(1f)) {
-                if (query.isEmpty()) {
-                    Text(
-                        text = "Search messages, @person, or apps...",
-                        color = TextMuted,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                BasicTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    singleLine = true,
-                    textStyle = TextStyle(
-                        color = TextPrimary,
-                        fontSize = 13.sp
-                    ),
-                    cursorBrush = SolidColor(ClicksOrange),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { }),
-                    modifier = Modifier.fillMaxWidth()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "OmniHub",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
                 )
+                if (unreadCount > 0) {
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = "$unreadCount new",
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
             }
-            Spacer(modifier = Modifier.width(6.dp))
-            if (query.isNotEmpty() || isComposerExpanded) {
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                AssistChip(
+                    onClick = onOpenLiveBridgeSettings,
+                    label = {
+                        Text(
+                            text = if (isLiveBridgeConnected) "Live Sync" else "Connect Live",
+                            fontSize = 12.sp,
+                            maxLines = 1
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.NotificationsActive,
+                            contentDescription = "Live Notification Access",
+                            tint = if (isLiveBridgeConnected) Color(0xFF34D399) else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = M3SurfaceContainer
+                    )
+                )
+
                 IconButton(
-                    onClick = onClearQuery,
-                    modifier = Modifier.size(20.dp)
+                    onClick = onResetDemo,
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Clear Omnibox",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(15.dp)
-                    )
-                }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(ClicksOrange.copy(alpha = 0.18f))
-                        .clickable { onToggleComposer() }
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = "+ Compose",
-                        color = ClicksOrange,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Restore Demo Messages",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
         }
 
-        // Expandable Universal Multi-Platform Composer Drawer
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // 2. Material 3 Pill Omnibox Search & Command Bar (Uses Native Device Keyboard)
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            placeholder = {
+                Text(
+                    text = "Search messages, @people, or apps...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Omnibox Search",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            },
+            trailingIcon = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(end = 6.dp)
+                ) {
+                    if (query.isNotEmpty() || isComposerExpanded) {
+                        IconButton(onClick = {
+                            onClearQuery()
+                            keyboardController?.hide()
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear Search"
+                            )
+                        }
+                    } else {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = CircleShape,
+                            modifier = Modifier.clickable { onToggleComposer() }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Compose",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Compose",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            singleLine = true,
+            shape = CircleShape,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = M3SurfaceContainerHigh,
+                unfocusedContainerColor = M3SurfaceContainer,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = Color.Transparent
+            ),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // 3. Expandable Material 3 Cross-Platform Composer Card (with Attachment Support)
         AnimatedVisibility(visible = isComposerExpanded) {
-            Surface(
+            ElevatedCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 6.dp),
-                color = ObsidianCard,
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, ClicksOrange.copy(alpha = 0.5f))
+                    .padding(top = 10.dp),
+                shape = RoundedCornerShape(20.dp)
             ) {
-                Column(modifier = Modifier.padding(10.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "UNIVERSAL OMNIBOX COMPOSER",
-                            color = ClicksOrange,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Cross-Platform Dispatch",
-                            color = TextSecondary,
-                            fontSize = 10.sp
-                        )
-                    }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(M3SurfaceContainerHigh)
+                        .padding(14.dp)
+                ) {
+                    Text(
+                        text = "New Universal Message",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // Recipient Row
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(ObsidianSurface)
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = "TO:",
-                            color = TextSecondary,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        BasicTextField(
-                            value = recipientInput,
-                            onValueChange = { recipientInput = it },
-                            singleLine = true,
-                            textStyle = TextStyle(
-                                color = TextPrimary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            cursorBrush = SolidColor(ClicksOrange),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // Channel Selector Pills (WhatsApp, Teams, Outlook, Gmail, SMS, Messenger)
+                    // Platform Selection Chips
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -381,117 +287,185 @@ fun OmniboxCommandBar(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         MessagingPlatform.entries.filter { it != MessagingPlatform.ALL }.forEach { platform ->
-                            val isSelected = composePlatform == platform
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(7.dp))
-                                    .background(if (isSelected) platform.accentColor else ObsidianSurface)
-                                    .border(
-                                        width = 1.dp,
-                                        color = platform.accentColor.copy(alpha = 0.5f),
-                                        shape = RoundedCornerShape(7.dp)
+                            val selected = composePlatform == platform
+                            FilterChip(
+                                selected = selected,
+                                onClick = { composePlatform = platform },
+                                label = {
+                                    Text(
+                                        text = platform.displayName,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                                     )
-                                    .clickable { composePlatform = platform }
-                                    .padding(horizontal = 9.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = platform.displayName,
-                                    color = if (isSelected) Color.White else platform.accentColor,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    softWrap = false
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = platform.containerColor,
+                                    selectedLabelColor = platform.accentColor
                                 )
-                            }
+                            )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // Message Body + Send Button
+                    OutlinedTextField(
+                        value = recipientInput,
+                        onValueChange = { recipientInput = it },
+                        label = { Text("Recipient") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (pendingAttachment != null) {
+                        AttachmentChipPreview(
+                            attachment = pendingAttachment,
+                            onRemove = onClearPendingAttachment
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    OutlinedTextField(
+                        value = messageBodyInput,
+                        onValueChange = { messageBodyInput = it },
+                        placeholder = { Text("Write a message via ${composePlatform.displayName}...") },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(composeFocusRequester)
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        BasicTextField(
-                            value = messageBodyInput,
-                            onValueChange = { messageBodyInput = it },
-                            textStyle = TextStyle(color = TextPrimary, fontSize = 12.sp),
-                            cursorBrush = SolidColor(ClicksOrange),
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(ObsidianSurface)
-                                .border(1.dp, ObsidianBorder, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 10.dp, vertical = 8.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(ClicksOrange)
-                                .clickable {
-                                    onSendOmniboxMessage(recipientInput, composePlatform, messageBodyInput)
-                                }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "Send",
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
+                        AssistChip(
+                            onClick = onPickAttachment,
+                            label = { Text("Attach File / Photo") },
+                            leadingIcon = {
                                 Icon(
-                                    imageVector = Icons.Default.Send,
-                                    contentDescription = "Send",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(12.dp)
+                                    imageVector = Icons.Default.AttachFile,
+                                    contentDescription = "Attach File",
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
+                        )
+
+                        Button(
+                            onClick = {
+                                onSendOmniboxMessage(recipientInput, composePlatform, messageBodyInput)
+                                messageBodyInput = ""
+                                keyboardController?.hide()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = "Send",
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Send")
                         }
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // BlackBerry Hub Horizontal Channel Filter Bar
+        // 4. Clean Material 3 Platform FilterChip Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             MessagingPlatform.entries.forEach { platform ->
                 val isSelected = platform == selectedPlatform
                 val count = platformCounts[platform] ?: 0
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            if (isSelected) platform.accentColor else ObsidianCard
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onSelectPlatform(platform) },
+                    label = {
+                        Text(
+                            text = if (count > 0) "${platform.displayName} ($count)" else platform.displayName,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 1
                         )
-                        .border(
-                            width = 1.dp,
-                            color = if (isSelected) platform.accentColor else platform.accentColor.copy(alpha = 0.28f),
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        .clickable { onSelectPlatform(platform) }
-                        .padding(horizontal = 9.dp, vertical = 4.dp)
-                ) {
+                    },
+                    shape = CircleShape,
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        containerColor = M3SurfaceContainer,
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = isSelected,
+                        borderColor = Color.Transparent
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AttachmentChipPreview(
+    attachment: HubAttachment,
+    onRemove: (() -> Unit)? = null
+) {
+    Surface(
+        color = M3SurfaceContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AttachFile,
+                    contentDescription = "Attachment",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
                     Text(
-                        text = "${platform.displayName} · $count",
-                        color = if (isSelected) Color.White else platform.accentColor,
-                        fontSize = 11.sp,
+                        text = attachment.fileName,
+                        style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
-                        softWrap = false
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = attachment.fileSizeLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (onRemove != null) {
+                IconButton(
+                    onClick = onRemove,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Remove Attachment",
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }

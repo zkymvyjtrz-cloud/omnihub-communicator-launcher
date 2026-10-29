@@ -1,18 +1,27 @@
 package com.clicks.omnihub.service
 
 import android.app.Notification
+import android.graphics.Bitmap
+import android.os.Bundle
+import android.os.Parcelable
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.clicks.omnihub.data.HubRepository
+import com.clicks.omnihub.model.AttachmentType
+import com.clicks.omnihub.model.ConversationTurn
 import com.clicks.omnihub.model.DirectReplyAction
+import com.clicks.omnihub.model.HubAttachment
 import com.clicks.omnihub.model.HubMessage
 import com.clicks.omnihub.model.MessagingPlatform
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Live Android Notification Bridge that captures real incoming messages from
  * WhatsApp, Microsoft Teams, Outlook, Gmail, SMS/Messages, and Facebook Messenger,
- * extracts any inline direct-reply [android.app.RemoteInput] actions, and feeds
- * them into the Universal Message Hub stream.
+ * extracts full multi-message conversation history (`EXTRA_MESSAGES`), image/file attachments,
+ * and inline direct-reply (`RemoteInput`) actions.
  */
 class HubNotificationListenerService : NotificationListenerService() {
 
@@ -73,12 +82,11 @@ class HubNotificationListenerService : NotificationListenerService() {
 
     private fun parseStatusBarNotification(sbn: StatusBarNotification): HubMessage? {
         val pkg = sbn.packageName ?: return null
-        if (pkg == packageName) return null // Ignore our own notifications
+        if (pkg == packageName) return null
 
         val notification = sbn.notification ?: return null
         val extras = notification.extras ?: return null
 
-        // Skip group summary notifications so we don't duplicate individual message items
         if ((notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0) {
             return null
         }
@@ -93,7 +101,6 @@ class HubNotificationListenerService : NotificationListenerService() {
 
         val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
 
-        // Match known platform or extract remote-input capable messaging app
         val directReply = extractDirectReplyAction(notification)
         val matchedPlatform = MessagingPlatform.fromPackageName(pkg)
             ?: if (directReply != null) MessagingPlatform.SMS else return null
@@ -112,6 +119,33 @@ class HubNotificationListenerService : NotificationListenerService() {
             ?.takeIf { it.isNotEmpty() }
             ?: listOf("Sounds good!", "On it 👍", "Give me 5 mins")
 
+        // Extract any attached picture preview from Notification extras
+        val extractedAttachments = mutableListOf<HubAttachment>()
+        @Suppress("DEPRECATION")
+        val pictureBitmap = extras.getParcelable<Bitmap>(Notification.EXTRA_PICTURE)
+        if (pictureBitmap != null) {
+            extractedAttachments.add(
+                HubAttachment(
+                    id = "pic_${sbn.postTime}",
+                    fileName = "Image_Attachment.jpg",
+                    fileSizeLabel = "Image Preview",
+                    mimeType = "image/jpeg",
+                    type = AttachmentType.IMAGE,
+                    previewBitmap = pictureBitmap
+                )
+            )
+        }
+
+        // Extract full multi-turn conversation history from Notification.EXTRA_MESSAGES if present
+        val extractedTurns = extractConversationHistory(
+            extras = extras,
+            fallbackSender = rawTitle,
+            fallbackText = rawText,
+            fallbackTime = sbn.postTime,
+            platform = matchedPlatform,
+            attachments = extractedAttachments
+        )
+
         return HubMessage(
             id = "live_${sbn.key.hashCode()}",
             notificationKey = sbn.key,
@@ -129,8 +163,80 @@ class HubNotificationListenerService : NotificationListenerService() {
             isDemo = false,
             quickReplies = smartReplies,
             directReplyAction = directReply,
-            contentIntent = notification.contentIntent
+            contentIntent = notification.contentIntent,
+            attachments = extractedAttachments,
+            conversationHistory = extractedTurns
         )
+    }
+
+    private fun extractConversationHistory(
+        extras: Bundle,
+        fallbackSender: String,
+        fallbackText: String,
+        fallbackTime: Long,
+        platform: MessagingPlatform,
+        attachments: List<HubAttachment>
+    ): List<ConversationTurn> {
+        val turns = mutableListOf<ConversationTurn>()
+        val timeFmt = SimpleDateFormat("h:mm a", Locale.US)
+
+        try {
+            @Suppress("DEPRECATION")
+            val parcelables: Array<Parcelable>? = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+            if (!parcelables.isNullOrEmpty()) {
+                parcelables.forEachIndexed { idx, p ->
+                    val b = p as? Bundle ?: return@forEachIndexed
+                    val text = b.getCharSequence("text")?.toString() ?: return@forEachIndexed
+                    val sender = b.getCharSequence("sender")?.toString() ?: fallbackSender
+                    val timeMillis = b.getLong("time", fallbackTime)
+                    val dataMime = b.getString("type")
+                    @Suppress("DEPRECATION")
+                    val dataUri = b.getParcelable<android.net.Uri>("uri")
+
+                    val turnAttachments = mutableListOf<HubAttachment>()
+                    if (dataUri != null) {
+                        turnAttachments.add(
+                            HubAttachment(
+                                id = "uri_${timeMillis}_$idx",
+                                fileName = dataUri.lastPathSegment ?: "Attachment",
+                                fileSizeLabel = dataMime ?: "Media Attachment",
+                                mimeType = dataMime ?: "*/*",
+                                type = if (dataMime?.startsWith("image") == true) AttachmentType.IMAGE else AttachmentType.DOCUMENT,
+                                uri = dataUri
+                            )
+                        )
+                    }
+
+                    turns.add(
+                        ConversationTurn(
+                            id = "live_turn_${timeMillis}_$idx",
+                            senderName = sender,
+                            isFromMe = false,
+                            text = text,
+                            timestampLabel = timeFmt.format(Date(timeMillis)),
+                            platform = platform,
+                            attachments = turnAttachments
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {
+        }
+
+        if (turns.isEmpty()) {
+            turns.add(
+                ConversationTurn(
+                    id = "live_turn_$fallbackTime",
+                    senderName = fallbackSender,
+                    isFromMe = false,
+                    text = fallbackText,
+                    timestampLabel = timeFmt.format(Date(fallbackTime)),
+                    platform = platform,
+                    attachments = attachments
+                )
+            )
+        }
+        return turns
     }
 
     private fun extractDirectReplyAction(notification: Notification): DirectReplyAction? {
@@ -154,9 +260,9 @@ class HubNotificationListenerService : NotificationListenerService() {
     private fun formatRelativeTime(postTimeMillis: Long): String {
         val diffMinutes = ((System.currentTimeMillis() - postTimeMillis) / 60_000L).coerceAtLeast(0L)
         return when {
-            diffMinutes < 1L -> "Just now"
-            diffMinutes < 60L -> "${diffMinutes}m ago"
-            else -> "${diffMinutes / 60L}h ago"
+            diffMinutes < 1L -> "Now"
+            diffMinutes < 60L -> "${diffMinutes}m"
+            else -> "${diffMinutes / 60L}h"
         }
     }
 }

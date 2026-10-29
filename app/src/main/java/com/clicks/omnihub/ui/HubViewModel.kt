@@ -2,11 +2,15 @@ package com.clicks.omnihub.ui
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clicks.omnihub.data.HubRepository
+import com.clicks.omnihub.model.AttachmentType
+import com.clicks.omnihub.model.HubAttachment
 import com.clicks.omnihub.model.HubMessage
 import com.clicks.omnihub.model.HubViewMode
 import com.clicks.omnihub.model.InstalledAppInfo
@@ -23,19 +27,18 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel powering the Clicks Communicator / BlackBerry Hub-inspired Home Launcher.
+ * ViewModel for the clean Material 3 OmniHub Communicator Launcher.
  * Coordinates:
- * 1. Unified Hub Stream & Channel Filters (WhatsApp, Teams, Outlook, Gmail, SMS, Messenger)
- * 2. Next-Gen Omnibox Command Bar (`/msg @Contact`, instant search, app launcher)
- * 3. Person-Centric Unified Threads (merging messages across apps by person)
- * 4. Physical QWERTY / Clicks Tactile Shortcuts (`R` Reply, `A` Archive, `S` Snooze, `F` Focus, `P` People)
- * 5. VIP Focus Shield & Monochrome Minimal App Launcher
+ * - Material 3 Unified Stream & Channel Filters
+ * - Full-Screen Conversation Detail & Context Sheet (multi-turn thread + attachments + native keyboard)
+ * - Universal Omnibox Search & Compose
+ * - Person-Centric Unified Threads
+ * - Native Android Attachment Picker (`ActivityResultContracts.GetContent`)
  */
 class HubViewModel : ViewModel() {
 
     val allMessages: StateFlow<List<HubMessage>> = HubRepository.messages
     val isLiveBridgeConnected: StateFlow<Boolean> = HubRepository.isNotificationListenerConnected
-    val statusBanner: StateFlow<String> = HubRepository.statusBanner
 
     private val _selectedPlatform = MutableStateFlow(MessagingPlatform.ALL)
     val selectedPlatform: StateFlow<MessagingPlatform> = _selectedPlatform.asStateFlow()
@@ -49,21 +52,28 @@ class HubViewModel : ViewModel() {
     private val _isOmniboxComposerOpen = MutableStateFlow(false)
     val isOmniboxComposerOpen: StateFlow<Boolean> = _isOmniboxComposerOpen.asStateFlow()
 
-    private val _focusedMessageId = MutableStateFlow<String?>("demo_teams_sarah")
-    val focusedMessageId: StateFlow<String?> = _focusedMessageId.asStateFlow()
+    /**
+     * When non-null, opens the full-screen Material 3 Conversation Context View for that message.
+     */
+    private val _openedConversationId = MutableStateFlow<String?>(null)
+    val openedConversationId: StateFlow<String?> = _openedConversationId.asStateFlow()
 
-    private val _inlineReplyingMessageId = MutableStateFlow<String?>(null)
-    val inlineReplyingMessageId: StateFlow<String?> = _inlineReplyingMessageId.asStateFlow()
-
-    private val _showTactileShortcutDeck = MutableStateFlow(false)
-    val showTactileShortcutDeck: StateFlow<Boolean> = _showTactileShortcutDeck.asStateFlow()
+    /**
+     * Pending attachment picked from the Android system file/photo picker.
+     */
+    private val _pendingAttachment = MutableStateFlow<HubAttachment?>(null)
+    val pendingAttachment: StateFlow<HubAttachment?> = _pendingAttachment.asStateFlow()
 
     private val _installedApps = MutableStateFlow<List<InstalledAppInfo>>(emptyList())
     val installedApps: StateFlow<List<InstalledAppInfo>> = _installedApps.asStateFlow()
 
-    /**
-     * Filtered message stream based on active platform pill, Omnibox search query, and VIP Focus mode.
-     */
+    val openedConversation: StateFlow<HubMessage?> = combine(
+        allMessages,
+        _openedConversationId
+    ) { messages, openId ->
+        if (openId == null) null else messages.firstOrNull { it.id == openId }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     val visibleMessages: StateFlow<List<HubMessage>> = combine(
         allMessages,
         _selectedPlatform,
@@ -88,9 +98,6 @@ class HubViewModel : ViewModel() {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /**
-     * Person-Centric Unified Threads: merges messages from the same contact across WhatsApp, Teams, Outlook, SMS, etc.
-     */
     val personThreads: StateFlow<List<PersonUnifiedThread>> = combine(
         allMessages,
         _omniboxQuery
@@ -128,21 +135,16 @@ class HubViewModel : ViewModel() {
         if (_viewMode.value == HubViewMode.APPS) {
             _viewMode.value = HubViewMode.STREAM
         }
-        HubRepository.postStatus("Channel Filter: ${platform.displayName}")
     }
 
     fun setViewMode(mode: HubViewMode) {
         _viewMode.value = mode
-        HubRepository.postStatus("Switched to ${mode.label} [${mode.shortcutKey}]")
     }
 
     fun updateOmniboxQuery(query: String) {
         _omniboxQuery.value = query
-        if (query.startsWith("/msg", ignoreCase = true) || query.startsWith("@")) {
+        if (query.startsWith("/msg", ignoreCase = true)) {
             _isOmniboxComposerOpen.value = true
-        } else if (query.equals("/clear", ignoreCase = true)) {
-            _omniboxQuery.value = ""
-            _isOmniboxComposerOpen.value = false
         } else if (query.equals("/reset", ignoreCase = true)) {
             _omniboxQuery.value = ""
             HubRepository.resetDemoStream()
@@ -152,9 +154,6 @@ class HubViewModel : ViewModel() {
     fun toggleOmniboxComposer(forceOpen: Boolean? = null) {
         val next = forceOpen ?: !_isOmniboxComposerOpen.value
         _isOmniboxComposerOpen.value = next
-        if (next && _omniboxQuery.value.isBlank()) {
-            _omniboxQuery.value = "/msg @Sarah Jenkins "
-        }
     }
 
     fun clearOmnibox() {
@@ -162,127 +161,116 @@ class HubViewModel : ViewModel() {
         _isOmniboxComposerOpen.value = false
     }
 
-    fun focusMessage(messageId: String) {
-        _focusedMessageId.value = messageId
+    /**
+     * Opens the full-screen Material 3 Conversation Context View for the clicked message.
+     */
+    fun openConversation(messageId: String) {
+        HubRepository.markMessageRead(messageId)
+        _openedConversationId.value = messageId
     }
 
-    fun toggleInlineReply(messageId: String) {
-        _focusedMessageId.value = messageId
-        _inlineReplyingMessageId.value = if (_inlineReplyingMessageId.value == messageId) null else messageId
+    fun closeConversation() {
+        _openedConversationId.value = null
+        _pendingAttachment.value = null
     }
 
-    fun toggleTactileShortcutDeck() {
-        _showTactileShortcutDeck.value = !_showTactileShortcutDeck.value
+    /**
+     * Resolves a file/photo URI selected from the Android system picker into a [HubAttachment].
+     */
+    fun onAttachmentPicked(context: Context, uri: Uri?) {
+        if (uri == null) return
+        val contentResolver = context.contentResolver
+        val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
+        var displayName = uri.lastPathSegment ?: "Attached_File"
+        var sizeBytes = 0L
+
+        try {
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                val sizeIdx = cursor.getColumnIndex(OpenableColumns.SIZE)
+                if (cursor.moveToFirst()) {
+                    if (nameIdx >= 0) displayName = cursor.getString(nameIdx) ?: displayName
+                    if (sizeIdx >= 0) sizeBytes = cursor.getLong(sizeIdx)
+                }
+            }
+        } catch (_: Exception) {
+        }
+
+        val sizeLabel = if (sizeBytes > 1024 * 1024) {
+            String.format("%.1f MB", sizeBytes / (1024f * 1024f))
+        } else if (sizeBytes > 1024) {
+            "${sizeBytes / 1024} KB"
+        } else {
+            "File Attachment"
+        }
+
+        val type = when {
+            mimeType.startsWith("image/") -> AttachmentType.IMAGE
+            mimeType.contains("pdf") || mimeType.contains("word") -> AttachmentType.DOCUMENT
+            mimeType.contains("sheet") || mimeType.contains("excel") || mimeType.contains("csv") -> AttachmentType.SPREADSHEET
+            mimeType.contains("presentation") || mimeType.contains("powerpoint") -> AttachmentType.PRESENTATION
+            mimeType.startsWith("audio/") -> AttachmentType.AUDIO
+            else -> AttachmentType.DOCUMENT
+        }
+
+        _pendingAttachment.value = HubAttachment(
+            id = "picked_${System.currentTimeMillis()}",
+            fileName = displayName,
+            fileSizeLabel = "$sizeLabel · ${type.name.lowercase().replaceFirstChar { it.uppercase() }}",
+            mimeType = mimeType,
+            type = type,
+            uri = uri
+        )
+    }
+
+    fun clearPendingAttachment() {
+        _pendingAttachment.value = null
     }
 
     fun sendReply(context: Context, messageId: String, replyText: String) {
-        if (HubRepository.sendInlineReply(context, messageId, replyText)) {
-            _inlineReplyingMessageId.value = null
+        val attachment = _pendingAttachment.value
+        if (HubRepository.sendReply(context, messageId, replyText, attachment)) {
+            _pendingAttachment.value = null
         }
     }
 
-    fun archiveFocusedOrSpecificMessage(messageId: String? = null) {
-        val targetId = messageId ?: _focusedMessageId.value ?: visibleMessages.value.firstOrNull()?.id ?: return
-        val nextCandidate = visibleMessages.value.firstOrNull { it.id != targetId }?.id
-        HubRepository.archiveMessage(targetId) { notifKey ->
+    fun openOriginalApp(context: Context, message: HubMessage) {
+        HubRepository.openOriginalAppConversation(context, message)
+    }
+
+    fun archiveMessage(messageId: String) {
+        HubRepository.archiveMessage(messageId) { notifKey ->
             HubNotificationListenerService.instance?.dismissSystemNotification(notifKey)
         }
-        _focusedMessageId.value = nextCandidate
-        if (_inlineReplyingMessageId.value == targetId) {
-            _inlineReplyingMessageId.value = null
+        if (_openedConversationId.value == messageId) {
+            _openedConversationId.value = null
         }
     }
 
-    fun snoozeFocusedOrSpecificMessage(messageId: String? = null) {
-        val targetId = messageId ?: _focusedMessageId.value ?: visibleMessages.value.firstOrNull()?.id ?: return
-        val nextCandidate = visibleMessages.value.firstOrNull { it.id != targetId }?.id
-        HubRepository.snoozeMessage(targetId)
-        _focusedMessageId.value = nextCandidate
+    fun snoozeMessage(messageId: String) {
+        HubRepository.snoozeMessage(messageId)
+        if (_openedConversationId.value == messageId) {
+            _openedConversationId.value = null
+        }
     }
 
     fun toggleVipForMessage(message: HubMessage) {
         HubRepository.toggleVipForSender(message.senderName)
     }
 
-    fun sendOmniboxOutbound(recipient: String, platform: MessagingPlatform, body: String) {
-        if (body.isBlank()) return
-        HubRepository.dispatchOmniboxOutboundMessage(recipient, platform, body)
+    fun sendOmniboxOutbound(context: Context, recipient: String, platform: MessagingPlatform, body: String) {
+        val attachment = _pendingAttachment.value
+        if (body.isBlank() && attachment == null) return
+        HubRepository.dispatchOmniboxOutboundMessage(context, recipient, platform, body, attachment)
+        _pendingAttachment.value = null
         _isOmniboxComposerOpen.value = false
         _omniboxQuery.value = ""
     }
 
     fun resetDemoStream() {
         HubRepository.resetDemoStream()
-        _focusedMessageId.value = "demo_teams_sarah"
     }
 
-    /**
-     * Handles physical QWERTY / Clicks Communicator single-key shortcuts when the user is not
-     * actively typing in a text field.
-     */
-    fun handleHardwareShortcutKey(keyChar: Char): Boolean {
-        return when (keyChar.uppercaseChar()) {
-            'R' -> {
-                val targetId = _focusedMessageId.value ?: visibleMessages.value.firstOrNull()?.id
-                if (targetId != null) {
-                    toggleInlineReply(targetId)
-                    HubRepository.postStatus("Shortcut [R] · Inline Reply opened")
-                    true
-                } else false
-            }
-            'A' -> {
-                archiveFocusedOrSpecificMessage()
-                true
-            }
-            'S' -> {
-                snoozeFocusedOrSpecificMessage()
-                true
-            }
-            'P' -> {
-                val nextMode = if (_viewMode.value == HubViewMode.PEOPLE) HubViewMode.STREAM else HubViewMode.PEOPLE
-                setViewMode(nextMode)
-                true
-            }
-            'F' -> {
-                val nextMode = if (_viewMode.value == HubViewMode.VIP_FOCUS) HubViewMode.STREAM else HubViewMode.VIP_FOCUS
-                setViewMode(nextMode)
-                true
-            }
-            'L' -> {
-                val nextMode = if (_viewMode.value == HubViewMode.APPS) HubViewMode.STREAM else HubViewMode.APPS
-                setViewMode(nextMode)
-                true
-            }
-            '/' -> {
-                toggleOmniboxComposer(forceOpen = true)
-                true
-            }
-            'J' -> {
-                moveFocusDelta(1)
-                true
-            }
-            'K' -> {
-                moveFocusDelta(-1)
-                true
-            }
-            else -> false
-        }
-    }
-
-    fun moveFocusDelta(delta: Int) {
-        val currentList = visibleMessages.value
-        if (currentList.isEmpty()) return
-        val currentIdx = currentList.indexOfFirst { it.id == _focusedMessageId.value }.coerceAtLeast(0)
-        val nextIdx = (currentIdx + delta).coerceIn(0, currentList.lastIndex)
-        val nextMsg = currentList[nextIdx]
-        _focusedMessageId.value = nextMsg.id
-        HubRepository.postStatus("Focused [${nextMsg.platform.displayName}] ${nextMsg.senderName}")
-    }
-
-    /**
-     * Loads installed launchable Android apps so the Omnibox and Monochrome Speed-Dial drawer
-     * can launch any application on the device.
-     */
     fun loadInstalledApps(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -317,12 +305,8 @@ class HubViewModel : ViewModel() {
             if (launchIntent != null) {
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(launchIntent)
-                HubRepository.postStatus("Launched $label")
-            } else {
-                HubRepository.postStatus("App $label is not installed on this device")
             }
-        } catch (e: Exception) {
-            HubRepository.postStatus("Could not launch $label")
+        } catch (_: Exception) {
         }
     }
 
@@ -353,13 +337,13 @@ class HubViewModel : ViewModel() {
 
     private fun categorizePackage(pkg: String): String {
         return when {
-            MessagingPlatform.fromPackageName(pkg) != null -> "Comms"
+            MessagingPlatform.fromPackageName(pkg) != null -> "Communication"
             pkg.contains("calendar", ignoreCase = true) -> "Schedule"
             pkg.contains("dialer", ignoreCase = true) || pkg.contains("telecom", ignoreCase = true) -> "Phone"
             pkg.contains("maps", ignoreCase = true) -> "Navigation"
             pkg.contains("camera", ignoreCase = true) -> "Camera"
             pkg.contains("notes", ignoreCase = true) || pkg.contains("keep", ignoreCase = true) -> "Notes"
-            else -> "Utility"
+            else -> "App"
         }
     }
 }
