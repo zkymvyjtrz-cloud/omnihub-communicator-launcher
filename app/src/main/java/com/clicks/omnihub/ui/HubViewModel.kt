@@ -2,9 +2,15 @@ package com.clicks.omnihub.ui
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.provider.Settings
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -24,16 +30,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel for the clean Material 3 OmniHub Communicator Launcher.
+ * ViewModel for the Material 3 OmniHub Communicator Launcher.
  * Coordinates:
- * - Material 3 Unified Stream & Channel Filters
- * - Full-Screen Conversation Detail & Context Sheet (multi-turn thread + attachments + native keyboard)
- * - Universal Omnibox Search & Compose
- * - Person-Centric Unified Threads
- * - Native Android Attachment Picker (`ActivityResultContracts.GetContent`)
+ * - Unified Communication Stream &VIP Filter
+ * - Full-Screen Conversation Detail & Context Sheet
+ * - Dedicated Widgets Panel (Built-in Material 3 Widgets + Native Android AppWidgetHost IDs)
+ * - Full Smartphone App Drawer (with real app icons, Pinned Favorites Dock, and App Info deep links)
  */
 class HubViewModel : ViewModel() {
 
@@ -46,26 +52,38 @@ class HubViewModel : ViewModel() {
     private val _viewMode = MutableStateFlow(HubViewMode.STREAM)
     val viewMode: StateFlow<HubViewMode> = _viewMode.asStateFlow()
 
+    private val _vipOnlyFilter = MutableStateFlow(false)
+    val vipOnlyFilter: StateFlow<Boolean> = _vipOnlyFilter.asStateFlow()
+
     private val _omniboxQuery = MutableStateFlow("")
     val omniboxQuery: StateFlow<String> = _omniboxQuery.asStateFlow()
 
     private val _isOmniboxComposerOpen = MutableStateFlow(false)
     val isOmniboxComposerOpen: StateFlow<Boolean> = _isOmniboxComposerOpen.asStateFlow()
 
-    /**
-     * When non-null, opens the full-screen Material 3 Conversation Context View for that message.
-     */
     private val _openedConversationId = MutableStateFlow<String?>(null)
     val openedConversationId: StateFlow<String?> = _openedConversationId.asStateFlow()
 
-    /**
-     * Pending attachment picked from the Android system file/photo picker.
-     */
     private val _pendingAttachment = MutableStateFlow<HubAttachment?>(null)
     val pendingAttachment: StateFlow<HubAttachment?> = _pendingAttachment.asStateFlow()
 
     private val _installedApps = MutableStateFlow<List<InstalledAppInfo>>(emptyList())
     val installedApps: StateFlow<List<InstalledAppInfo>> = _installedApps.asStateFlow()
+
+    private val _selectedAppCategory = MutableStateFlow("All")
+    val selectedAppCategory: StateFlow<String> = _selectedAppCategory.asStateFlow()
+
+    /**
+     * Hosted native Android AppWidget IDs bound by the user on the Widgets page.
+     */
+    private val _hostedAppWidgetIds = MutableStateFlow<List<Int>>(emptyList())
+    val hostedAppWidgetIds: StateFlow<List<Int>> = _hostedAppWidgetIds.asStateFlow()
+
+    /**
+     * Quick scratchpad note persisted in the Widgets panel.
+     */
+    private val _quickNoteText = MutableStateFlow("• Review Q4 Board Deck (Slide 14)\n• Call Marcus after SFO arrival\n• Dinner at 7:30 PM in SoMa")
+    val quickNoteText: StateFlow<String> = _quickNoteText.asStateFlow()
 
     val openedConversation: StateFlow<HubMessage?> = combine(
         allMessages,
@@ -78,14 +96,14 @@ class HubViewModel : ViewModel() {
         allMessages,
         _selectedPlatform,
         _omniboxQuery,
-        _viewMode
-    ) { messages, platform, query, mode ->
+        _vipOnlyFilter
+    ) { messages, platform, query, vipOnly ->
         val cleanQuery = query.trim()
         val isSlashCommand = cleanQuery.startsWith("/")
 
         messages.filter { msg ->
             val matchesPlatform = platform == MessagingPlatform.ALL || msg.platform == platform
-            val matchesVipFocus = mode != HubViewMode.VIP_FOCUS || msg.isVip
+            val matchesVipFocus = !vipOnly || msg.isVip
             val matchesSearch = if (cleanQuery.isEmpty() || isSlashCommand) {
                 true
             } else {
@@ -132,13 +150,37 @@ class HubViewModel : ViewModel() {
 
     fun selectPlatform(platform: MessagingPlatform) {
         _selectedPlatform.value = platform
-        if (_viewMode.value == HubViewMode.APPS) {
+        if (_viewMode.value == HubViewMode.APPS || _viewMode.value == HubViewMode.WIDGETS) {
             _viewMode.value = HubViewMode.STREAM
         }
     }
 
     fun setViewMode(mode: HubViewMode) {
         _viewMode.value = mode
+    }
+
+    fun toggleVipOnlyFilter() {
+        _vipOnlyFilter.value = !_vipOnlyFilter.value
+    }
+
+    fun selectAppCategory(category: String) {
+        _selectedAppCategory.value = category
+    }
+
+    fun updateQuickNote(text: String) {
+        _quickNoteText.value = text
+    }
+
+    fun addHostedWidgetId(appWidgetId: Int) {
+        if (appWidgetId != -1) {
+            _hostedAppWidgetIds.update { current ->
+                if (current.contains(appWidgetId)) current else current + appWidgetId
+            }
+        }
+    }
+
+    fun removeHostedWidgetId(appWidgetId: Int) {
+        _hostedAppWidgetIds.update { current -> current.filterNot { it == appWidgetId } }
     }
 
     fun updateOmniboxQuery(query: String) {
@@ -161,9 +203,6 @@ class HubViewModel : ViewModel() {
         _isOmniboxComposerOpen.value = false
     }
 
-    /**
-     * Opens the full-screen Material 3 Conversation Context View for the clicked message.
-     */
     fun openConversation(messageId: String) {
         HubRepository.markMessageRead(messageId)
         _openedConversationId.value = messageId
@@ -174,9 +213,6 @@ class HubViewModel : ViewModel() {
         _pendingAttachment.value = null
     }
 
-    /**
-     * Resolves a file/photo URI selected from the Android system picker into a [HubAttachment].
-     */
     fun onAttachmentPicked(context: Context, uri: Uri?) {
         if (uri == null) return
         val contentResolver = context.contentResolver
@@ -271,6 +307,10 @@ class HubViewModel : ViewModel() {
         HubRepository.resetDemoStream()
     }
 
+    /**
+     * Loads all launchable Android apps along with their real icons (`loadIcon(pm)`) and
+     * marks essential smartphone apps as favorites for the Pinned Favorites Dock.
+     */
     fun loadInstalledApps(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -284,10 +324,19 @@ class HubViewModel : ViewModel() {
                         val pkg = info.activityInfo?.packageName ?: return@mapNotNull null
                         if (pkg == context.packageName) return@mapNotNull null
                         val label = info.loadLabel(pm)?.toString() ?: pkg
+                        val iconBitmap = try {
+                            drawableToImageBitmap(info.loadIcon(pm))
+                        } catch (_: Exception) {
+                            null
+                        }
+                        val category = categorizePackage(pkg, label)
+                        val isFav = isDefaultFavoritePackage(pkg, label)
                         InstalledAppInfo(
                             label = label,
                             packageName = pkg,
-                            categoryTag = categorizePackage(pkg)
+                            categoryTag = category,
+                            iconBitmap = iconBitmap,
+                            isFavorite = isFav
                         )
                     }
                     .distinctBy { it.packageName }
@@ -299,13 +348,42 @@ class HubViewModel : ViewModel() {
         }
     }
 
-    fun launchApp(context: Context, packageName: String, label: String) {
+    fun toggleFavoriteApp(packageName: String) {
+        _installedApps.update { list ->
+            list.map { app ->
+                if (app.packageName == packageName) app.copy(isFavorite = !app.isFavorite) else app
+            }
+        }
+    }
+
+    fun launchApp(context: Context, packageName: String, label: String = "") {
         try {
             val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
             if (launchIntent != null) {
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(launchIntent)
             }
+        } catch (_: Exception) {
+        }
+    }
+
+    fun launchSystemAction(context: Context, action: String) {
+        try {
+            val intent = Intent(action).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+        }
+    }
+
+    fun openAppInfoSettings(context: Context, packageName: String) {
+        try {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", packageName, null)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
         } catch (_: Exception) {
         }
     }
@@ -335,15 +413,59 @@ class HubViewModel : ViewModel() {
         }
     }
 
-    private fun categorizePackage(pkg: String): String {
+    private fun drawableToImageBitmap(drawable: Drawable): ImageBitmap {
+        if (drawable is BitmapDrawable && drawable.bitmap != null) {
+            return drawable.bitmap.asImageBitmap()
+        }
+        val width = drawable.intrinsicWidth.coerceAtLeast(96).coerceAtMost(192)
+        val height = drawable.intrinsicHeight.coerceAtLeast(96).coerceAtMost(192)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        return bitmap.asImageBitmap()
+    }
+
+    private fun isDefaultFavoritePackage(pkg: String, label: String): Boolean {
+        val lowerPkg = pkg.lowercase()
+        val lowerLabel = label.lowercase()
+        return lowerPkg.contains("dialer") ||
+            lowerPkg.contains("camera") ||
+            lowerPkg.contains("chrome") ||
+            lowerPkg.contains("sbrowser") ||
+            lowerPkg.contains("whatsapp") ||
+            lowerPkg.contains("teams") ||
+            lowerPkg.contains("outlook") ||
+            lowerPkg.contains("gm") ||
+            lowerPkg.contains("messaging") ||
+            lowerPkg.contains("gallery") ||
+            lowerPkg.contains("photos") ||
+            lowerLabel == "phone" ||
+            lowerLabel == "camera" ||
+            lowerLabel == "messages"
+    }
+
+    private fun categorizePackage(pkg: String, label: String): String {
+        val p = pkg.lowercase()
+        val l = label.lowercase()
         return when {
-            MessagingPlatform.fromPackageName(pkg) != null -> "Communication"
-            pkg.contains("calendar", ignoreCase = true) -> "Schedule"
-            pkg.contains("dialer", ignoreCase = true) || pkg.contains("telecom", ignoreCase = true) -> "Phone"
-            pkg.contains("maps", ignoreCase = true) -> "Navigation"
-            pkg.contains("camera", ignoreCase = true) -> "Camera"
-            pkg.contains("notes", ignoreCase = true) || pkg.contains("keep", ignoreCase = true) -> "Notes"
-            else -> "App"
+            MessagingPlatform.fromPackageName(pkg) != null ||
+                p.contains("Slack", ignoreCase = true) ||
+                p.contains("discord") ||
+                p.contains("telegram") ||
+                p.contains("dialer") ||
+                l.contains("phone") ||
+                l.contains("mail") -> "Communication"
+            p.contains("calendar") || p.contains("notes") || p.contains("keep") ||
+                p.contains("docs") || p.contains("office") || p.contains("notion") ||
+                p.contains("obsidian") -> "Productivity"
+            p.contains("youtube") || p.contains("spotify") || p.contains("netflix") ||
+                p.contains("music") || p.contains("gallery") || p.contains("photos") ||
+                p.contains("camera") || p.contains("video") -> "Media"
+            p.contains("maps") || p.contains("chrome") || p.contains("browser") ||
+                p.contains("settings") || p.contains("clock") || p.contains("calculator") ||
+                p.contains("files") || p.contains("wallet") -> "Tools"
+            else -> "Apps"
         }
     }
 }

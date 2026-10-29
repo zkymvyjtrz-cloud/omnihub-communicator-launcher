@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 
 /**
  * Supported messaging & communication channels in the Universal Message Hub.
@@ -88,9 +89,6 @@ enum class MessagingPlatform(
     }
 }
 
-/**
- * Types of attachments supported inside the Universal Message Hub.
- */
 enum class AttachmentType {
     IMAGE,
     DOCUMENT,
@@ -100,9 +98,6 @@ enum class AttachmentType {
     LINK
 }
 
-/**
- * Represents a file, photo, document, or media attachment in a conversation.
- */
 data class HubAttachment(
     val id: String,
     val fileName: String,
@@ -113,9 +108,6 @@ data class HubAttachment(
     val previewBitmap: Bitmap? = null
 )
 
-/**
- * Represents an individual message bubble inside a full conversation thread.
- */
 data class ConversationTurn(
     val id: String,
     val senderName: String,
@@ -126,20 +118,12 @@ data class ConversationTurn(
     val attachments: List<HubAttachment> = emptyList()
 )
 
-/**
- * Encapsulates an Android Notification's direct-reply RemoteInput action so the user
- * can respond inline directly from the Home Launcher or Conversation sheet using the default keyboard.
- */
 data class DirectReplyAction(
     val actionIntent: PendingIntent,
     val remoteInput: RemoteInput,
     val extras: Bundle = Bundle()
 )
 
-/**
- * Represents a conversation item inside the Universal Message Hub stream, including
- * its full multi-turn conversation context and attachments.
- */
 data class HubMessage(
     val id: String,
     val notificationKey: String? = null,
@@ -162,10 +146,6 @@ data class HubMessage(
     val conversationHistory: List<ConversationTurn> = emptyList()
 )
 
-/**
- * Groups multiple HubMessages from the same person across different messaging platforms
- * (e.g. Sarah Jenkins on Teams + WhatsApp) into a unified Person-Centric Hub card.
- */
 data class PersonUnifiedThread(
     val senderName: String,
     val senderInitials: String,
@@ -177,20 +157,26 @@ data class PersonUnifiedThread(
 )
 
 /**
- * Represents an installed Android application for the Omnibox search & minimal app drawer.
+ * Represents an installed Android application with its real icon for the App Drawer and Favorites Dock.
  */
 data class InstalledAppInfo(
     val label: String,
     val packageName: String,
-    val categoryTag: String = "App"
+    val categoryTag: String = "App",
+    val iconBitmap: ImageBitmap? = null,
+    val isFavorite: Boolean = false
 )
 
 /**
- * Primary navigation destinations of the Material 3 OmniHub Launcher.
+ * Primary navigation destinations of the Material 3 OmniHub Launcher:
+ * - STREAM: Communication-first Unified Inbox
+ * - PEOPLE: Person-Centric Threads across apps
+ * - WIDGETS: Dedicated Bottom Panel / Page for Built-in & Native Android System Widgets
+ * - APPS: Full Smartphone App Drawer with Real Icons, Categories & Pinned Favorites
  */
 enum class HubViewMode(val label: String) {
     STREAM("Inbox"),
     PEOPLE("People"),
-    VIP_FOCUS("VIP"),
+    WIDGETS("Widgets"),
     APPS("Apps")
 }

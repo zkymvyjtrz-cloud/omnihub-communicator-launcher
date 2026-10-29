@@ -1,11 +1,15 @@
 package com.clicks.omnihub.ui
 
+import android.app.Activity
+import android.appwidget.AppWidgetHost
+import android.appwidget.AppWidgetManager
+import android.content.Intent
+import android.provider.MediaStore
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,21 +21,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -40,26 +40,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.clicks.omnihub.model.HubViewMode
 import com.clicks.omnihub.model.InstalledAppInfo
 import com.clicks.omnihub.model.MessagingPlatform
 import com.clicks.omnihub.ui.components.ConversationContextSheet
+import com.clicks.omnihub.ui.components.DedicatedWidgetsDashboardPage
 import com.clicks.omnihub.ui.components.HubMessageCard
 import com.clicks.omnihub.ui.components.MaterialOmniboxTopBar
 import com.clicks.omnihub.ui.components.OmniHubBottomNavigationBar
 import com.clicks.omnihub.ui.components.PersonUnifiedThreadCard
+import com.clicks.omnihub.ui.components.QuickSmartphoneFavoritesBar
+import com.clicks.omnihub.ui.components.SmartphoneAppDrawerGridPage
 import com.clicks.omnihub.ui.theme.M3SurfaceBackground
 import com.clicks.omnihub.ui.theme.M3SurfaceContainer
-import com.clicks.omnihub.ui.theme.M3SurfaceContainerHigh
+
+private const val APPWIDGET_HOST_ID = 2048
 
 /**
- * Root Home Screen Composable for the clean Material 3 OmniHub Communicator Launcher.
- * - Uses Material 3 Scaffold, FilterChips, ElevatedCards, and NavigationBar.
- * - Exclusively uses the device's default system keyboard (Samsung Keyboard / Gboard).
- * - Tapping any conversation opens [ConversationContextSheet] with full multi-turn thread history
- *   and attachment support.
+ * Root Home Screen Composable for the Material 3 OmniHub Communicator Launcher.
+ * Combines:
+ * - Communication-First Unified Stream (`Inbox`) & Person-Centric Threads (`People`)
+ * - Full-Screen Conversation Detail & Context Sheet (`ConversationContextSheet`)
+ * - Dedicated Widgets Panel (`Widgets` tab) with Built-in Material 3 Widgets + Native Android `AppWidgetHost`
+ * - Full Smartphone App Drawer (`Apps` tab) with Real Icons, Categories & Pinned Favorites Dock
  */
 @Composable
 fun OmniHubLauncherScreen(viewModel: HubViewModel) {
@@ -77,6 +81,42 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
     val pendingAttachment by viewModel.pendingAttachment.collectAsState()
     val isLiveBridgeConnected by viewModel.isLiveBridgeConnected.collectAsState()
     val installedApps by viewModel.installedApps.collectAsState()
+    val selectedAppCategory by viewModel.selectedAppCategory.collectAsState()
+    val hostedWidgetIds by viewModel.hostedAppWidgetIds.collectAsState()
+    val quickNoteText by viewModel.quickNoteText.collectAsState()
+
+    // Native Android AppWidgetHost & AppWidgetManager for hosting real system widgets
+    val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
+    val appWidgetHost = remember { AppWidgetHost(context, APPWIDGET_HOST_ID) }
+
+    DisposableEffect(appWidgetHost) {
+        try {
+            appWidgetHost.startListening()
+        } catch (_: Exception) {
+        }
+        onDispose {
+            try {
+                appWidgetHost.stopListening()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    // Launcher for picking a native Android System Widget
+    val widgetPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val data = result.data
+        val appWidgetId = data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1) ?: -1
+        if (result.resultCode == Activity.RESULT_OK && appWidgetId != -1) {
+            viewModel.addHostedWidgetId(appWidgetId)
+        } else if (appWidgetId != -1) {
+            try {
+                appWidgetHost.deleteAppWidgetId(appWidgetId)
+            } catch (_: Exception) {
+            }
+        }
+    }
 
     // Native Android System File / Photo Picker for Attachments
     val attachmentPickerLauncher = rememberLauncherForActivityResult(
@@ -89,11 +129,17 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
         viewModel.loadInstalledApps(context)
     }
 
-    // Handle system Back press cleanly inside Conversation Detail view or Omnibox
-    BackHandler(enabled = openedConversation != null || isOmniboxComposerOpen || omniboxQuery.isNotEmpty()) {
+    // Handle system Back press cleanly
+    BackHandler(
+        enabled = openedConversation != null ||
+            isOmniboxComposerOpen ||
+            omniboxQuery.isNotEmpty() ||
+            viewMode != HubViewMode.STREAM
+    ) {
         when {
             openedConversation != null -> viewModel.closeConversation()
             isOmniboxComposerOpen || omniboxQuery.isNotEmpty() -> viewModel.clearOmnibox()
+            viewMode != HubViewMode.STREAM -> viewModel.setViewMode(HubViewMode.STREAM)
         }
     }
 
@@ -108,25 +154,21 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
 
     val defaultEssentialApps = remember {
         listOf(
-            InstalledAppInfo("Phone", "com.samsung.android.dialer", "Phone"),
-            InstalledAppInfo("Messages", "com.google.android.apps.messaging", "Communication"),
-            InstalledAppInfo("WhatsApp", "com.whatsapp", "Communication"),
-            InstalledAppInfo("Microsoft Teams", "com.microsoft.teams", "Communication"),
-            InstalledAppInfo("Microsoft Outlook", "com.microsoft.office.outlook", "Communication"),
-            InstalledAppInfo("Gmail", "com.google.android.gm", "Communication"),
-            InstalledAppInfo("Calendar", "com.samsung.android.calendar", "Schedule"),
-            InstalledAppInfo("Google Maps", "com.google.android.apps.maps", "Navigation"),
-            InstalledAppInfo("Camera", "com.sec.android.app.camera", "Camera")
+            InstalledAppInfo("Phone", "com.samsung.android.dialer", "Communication", isFavorite = true),
+            InstalledAppInfo("Messages", "com.google.android.apps.messaging", "Communication", isFavorite = true),
+            InstalledAppInfo("WhatsApp", "com.whatsapp", "Communication", isFavorite = true),
+            InstalledAppInfo("Microsoft Teams", "com.microsoft.teams", "Communication", isFavorite = true),
+            InstalledAppInfo("Microsoft Outlook", "com.microsoft.office.outlook", "Communication", isFavorite = true),
+            InstalledAppInfo("Gmail", "com.google.android.gm", "Communication", isFavorite = true),
+            InstalledAppInfo("Calendar", "com.samsung.android.calendar", "Productivity", isFavorite = true),
+            InstalledAppInfo("Google Maps", "com.google.android.apps.maps", "Tools", isFavorite = true),
+            InstalledAppInfo("Camera", "com.sec.android.app.camera", "Media", isFavorite = true)
         )
     }
 
-    val filteredApps = remember(installedApps, omniboxQuery) {
-        val source = installedApps.ifEmpty { defaultEssentialApps }
-        if (omniboxQuery.isBlank() || omniboxQuery.startsWith("/")) {
-            source
-        } else {
-            source.filter { it.label.contains(omniboxQuery, ignoreCase = true) }
-        }
+    val activeAppsList = if (installedApps.isNotEmpty()) installedApps else defaultEssentialApps
+    val favoriteDockApps = remember(activeAppsList) {
+        activeAppsList.filter { it.isFavorite }.take(4)
     }
 
     Crossfade(
@@ -134,7 +176,6 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
         label = "ConversationDetailTransition"
     ) { activeConversation ->
         if (activeConversation != null) {
-            // Full-Screen Material 3 Conversation Context View
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -164,7 +205,6 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
                 )
             }
         } else {
-            // Main Material 3 Home Launcher Scaffold
             Scaffold(
                 modifier = Modifier
                     .fillMaxSize()
@@ -194,212 +234,173 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
                     )
                 },
                 bottomBar = {
-                    OmniHubBottomNavigationBar(
-                        currentMode = viewMode,
-                        onSelectMode = { viewModel.setViewMode(it) }
-                    )
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        // Show Quick Smartphone Favorites Dock on the Inbox & People tabs so apps/widgets are 1 tap away
+                        if (viewMode == HubViewMode.STREAM || viewMode == HubViewMode.PEOPLE) {
+                            QuickSmartphoneFavoritesBar(
+                                favoriteApps = favoriteDockApps,
+                                onLaunchApp = { app ->
+                                    viewModel.launchApp(context, app.packageName, app.label)
+                                },
+                                onOpenDialer = {
+                                    viewModel.launchSystemAction(context, Intent.ACTION_DIAL)
+                                },
+                                onOpenCamera = {
+                                    viewModel.launchSystemAction(context, MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
+                                },
+                                onOpenBrowser = {
+                                    viewModel.launchApp(context, "com.android.chrome", "Chrome")
+                                },
+                                onOpenWidgetsPage = {
+                                    viewModel.setViewMode(HubViewMode.WIDGETS)
+                                },
+                                onOpenAppsDrawer = {
+                                    viewModel.setViewMode(HubViewMode.APPS)
+                                }
+                            )
+                        }
+                        OmniHubBottomNavigationBar(
+                            currentMode = viewMode,
+                            onSelectMode = { viewModel.setViewMode(it) }
+                        )
+                    }
                 }
             ) { innerPadding ->
-                LazyColumn(
-                    state = listState,
+                BoxContainer(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(innerPadding),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(innerPadding)
                 ) {
-                    if (viewMode == HubViewMode.VIP_FOCUS) {
-                        item(key = "vip_focus_banner") {
-                            val heldCount = allMessages.count { !it.isVip }
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "VIP Priority Focus",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                        Text(
-                                            text = "Showing starred VIP contacts · $heldCount other threads muted",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
-                                        )
-                                    }
-                                    TextButton(onClick = { viewModel.setViewMode(HubViewMode.STREAM) }) {
-                                        Text(
-                                            text = "Show All",
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
                     when (viewMode) {
-                        HubViewMode.PEOPLE -> {
-                            items(
-                                items = personThreads,
-                                key = { "person_${it.senderName}" }
-                            ) { thread ->
-                                PersonUnifiedThreadCard(
-                                    thread = thread,
-                                    onOpenMessageConversation = { msgId ->
-                                        viewModel.openConversation(msgId)
-                                    },
-                                    onArchiveAllFromPerson = {
-                                        thread.messages.forEach { msg ->
-                                            viewModel.archiveMessage(msg.id)
+                        HubViewMode.WIDGETS -> {
+                            DedicatedWidgetsDashboardPage(
+                                appWidgetHost = appWidgetHost,
+                                appWidgetManager = appWidgetManager,
+                                hostedWidgetIds = hostedWidgetIds,
+                                quickNoteText = quickNoteText,
+                                onUpdateQuickNote = { viewModel.updateQuickNote(it) },
+                                onAddSystemWidgetClick = {
+                                    try {
+                                        val appWidgetId = appWidgetHost.allocateAppWidgetId()
+                                        val pickIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
+                                            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
                                         }
+                                        widgetPickerLauncher.launch(pickIntent)
+                                    } catch (_: Exception) {
                                     }
-                                )
-                            }
+                                },
+                                onRemoveSystemWidget = { id ->
+                                    try {
+                                        appWidgetHost.deleteAppWidgetId(id)
+                                    } catch (_: Exception) {
+                                    }
+                                    viewModel.removeHostedWidgetId(id)
+                                },
+                                onOpenSystemAction = { action ->
+                                    viewModel.launchSystemAction(context, action)
+                                }
+                            )
                         }
 
                         HubViewMode.APPS -> {
-                            item(key = "set_default_launcher_banner") {
-                                Surface(
-                                    color = M3SurfaceContainerHigh,
-                                    shape = RoundedCornerShape(18.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { viewModel.openDefaultLauncherSettings(context) }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(16.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Default Home Launcher",
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = "${filteredApps.size} installed apps · Tap to set OmniHub as Default Home",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Button(onClick = { viewModel.openDefaultLauncherSettings(context) }) {
-                                            Text("Set Default")
-                                        }
-                                    }
+                            SmartphoneAppDrawerGridPage(
+                                installedApps = activeAppsList,
+                                selectedCategory = selectedAppCategory,
+                                searchQuery = omniboxQuery,
+                                onSelectCategory = { viewModel.selectAppCategory(it) },
+                                onLaunchApp = { app ->
+                                    viewModel.launchApp(context, app.packageName, app.label)
+                                },
+                                onLongPressApp = { app ->
+                                    viewModel.openAppInfoSettings(context, app.packageName)
+                                },
+                                onOpenDefaultLauncherSettings = {
+                                    viewModel.openDefaultLauncherSettings(context)
                                 }
-                            }
+                            )
+                        }
 
-                            itemsIndexed(
-                                items = filteredApps,
-                                key = { _, app -> "app_${app.packageName}" }
-                            ) { index, app ->
-                                Surface(
-                                    color = M3SurfaceContainer,
-                                    shape = RoundedCornerShape(16.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { viewModel.launchApp(context, app.packageName, app.label) }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text(
-                                                text = String.format("%02d", index + 1),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Spacer(modifier = Modifier.width(14.dp))
-                                            Text(
-                                                text = app.label,
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSurface,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
+                        HubViewMode.PEOPLE -> {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(
+                                    items = personThreads,
+                                    key = { "person_${it.senderName}" }
+                                ) { thread ->
+                                    PersonUnifiedThreadCard(
+                                        thread = thread,
+                                        onOpenMessageConversation = { msgId ->
+                                            viewModel.openConversation(msgId)
+                                        },
+                                        onArchiveAllFromPerson = {
+                                            thread.messages.forEach { msg ->
+                                                viewModel.archiveMessage(msg.id)
+                                            }
                                         }
-                                        Surface(
-                                            color = M3SurfaceContainerHigh,
-                                            shape = CircleShape
-                                        ) {
-                                            Text(
-                                                text = app.categoryTag,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                            )
-                                        }
-                                    }
+                                    )
                                 }
                             }
                         }
 
-                        HubViewMode.STREAM, HubViewMode.VIP_FOCUS -> {
-                            if (visibleMessages.isEmpty()) {
-                                item(key = "inbox_zero_state") {
-                                    ElevatedCard(
-                                        shape = RoundedCornerShape(20.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(M3SurfaceContainer)
-                                                .padding(28.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally
+                        HubViewMode.STREAM -> {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                if (visibleMessages.isEmpty()) {
+                                    item(key = "inbox_zero_state") {
+                                        ElevatedCard(
+                                            shape = RoundedCornerShape(20.dp),
+                                            modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text(
-                                                text = "You're all caught up",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Spacer(modifier = Modifier.height(6.dp))
-                                            Text(
-                                                text = "Every conversation across your connected apps has been triaged.",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Spacer(modifier = Modifier.height(14.dp))
-                                            Button(onClick = { viewModel.resetDemoStream() }) {
-                                                Text("Restore Sample Conversations")
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .background(M3SurfaceContainer)
+                                                    .padding(28.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                Text(
+                                                    text = "You're all caught up",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Spacer(modifier = Modifier.height(6.dp))
+                                                Text(
+                                                    text = "Every conversation across your connected apps has been triaged.",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Spacer(modifier = Modifier.height(14.dp))
+                                                Button(onClick = { viewModel.resetDemoStream() }) {
+                                                    Text("Restore Sample Conversations")
+                                                }
                                             }
                                         }
                                     }
-                                }
-                            } else {
-                                items(
-                                    items = visibleMessages,
-                                    key = { it.id }
-                                ) { message ->
-                                    HubMessageCard(
-                                        message = message,
-                                        onOpenConversation = { viewModel.openConversation(message.id) },
-                                        onQuickReply = { replyText ->
-                                            viewModel.sendReply(context, message.id, replyText)
-                                        },
-                                        onArchive = { viewModel.archiveMessage(message.id) },
-                                        onSnooze = { viewModel.snoozeMessage(message.id) },
-                                        onToggleVip = { viewModel.toggleVipForMessage(message) }
-                                    )
+                                } else {
+                                    items(
+                                        items = visibleMessages,
+                                        key = { it.id }
+                                    ) { message ->
+                                        HubMessageCard(
+                                            message = message,
+                                            onOpenConversation = { viewModel.openConversation(message.id) },
+                                            onQuickReply = { replyText ->
+                                                viewModel.sendReply(context, message.id, replyText)
+                                            },
+                                            onArchive = { viewModel.archiveMessage(message.id) },
+                                            onSnooze = { viewModel.snoozeMessage(message.id) },
+                                            onToggleVip = { viewModel.toggleVipForMessage(message) }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -407,5 +408,15 @@ fun OmniHubLauncherScreen(viewModel: HubViewModel) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BoxContainer(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Column(modifier = modifier) {
+        content()
     }
 }
