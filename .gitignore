@@ -1,0 +1,15 @@
+# Build outputs (never commit local build artifacts)
+.gradle/
+build/
+app/build/
+local.properties
+
+# Android Studio / IntelliJ metadata
+.idea/
+*.iml
+.cxx/
+captures/
+.externalNativeBuild/
+
+# macOS metadata
+.DS_Store
